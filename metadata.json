@@ -1,0 +1,6 @@
+{
+  "name": "AuraType AI",
+  "description": "Cinematic & Dynamic Typing Studio with grapheme-accurate Vietnamese & English engine, Ghost Replay, and AI passage generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
