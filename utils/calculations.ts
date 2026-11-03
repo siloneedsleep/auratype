@@ -2,7 +2,8 @@ export const RULES_VERSION = 1;
 export const PROMPT_VERSION = 1;
 
 export type RankTier = 'S+' | 'S' | 'A' | 'B' | 'C';
-export type EngineStatus = 'loading' | 'ready' | 'running' | 'completed' | 'interrupted' | 'error';
+export type EngineStatus =
+  'loading' | 'ready' | 'running' | 'completed' | 'interrupted' | 'error';
 
 export interface ReplayEvent {
   t: number;
@@ -54,8 +55,16 @@ export interface AttemptRecord {
  * Calculates Net WPM: (correctFinal / 5) / minutes
  * Standard 5 graphemes = 1 word, including spaces.
  */
-export function calculateNetWpm(correctFinal: number, elapsedMs: number): number {
-  if (!Number.isFinite(correctFinal) || !Number.isFinite(elapsedMs) || elapsedMs <= 0 || correctFinal <= 0) {
+export function calculateNetWpm(
+  correctFinal: number,
+  elapsedMs: number
+): number {
+  if (
+    !Number.isFinite(correctFinal) ||
+    !Number.isFinite(elapsedMs) ||
+    elapsedMs <= 0 ||
+    correctFinal <= 0
+  ) {
     return 0;
   }
   const minutes = elapsedMs / 60000;
@@ -66,8 +75,16 @@ export function calculateNetWpm(correctFinal: number, elapsedMs: number): number
 /**
  * Calculates Gross WPM: (insertedTotal / 5) / minutes
  */
-export function calculateGrossWpm(insertedTotal: number, elapsedMs: number): number {
-  if (!Number.isFinite(insertedTotal) || !Number.isFinite(elapsedMs) || elapsedMs <= 0 || insertedTotal <= 0) {
+export function calculateGrossWpm(
+  insertedTotal: number,
+  elapsedMs: number
+): number {
+  if (
+    !Number.isFinite(insertedTotal) ||
+    !Number.isFinite(elapsedMs) ||
+    elapsedMs <= 0 ||
+    insertedTotal <= 0
+  ) {
     return 0;
   }
   const minutes = elapsedMs / 60000;
@@ -79,14 +96,18 @@ export function calculateGrossWpm(insertedTotal: number, elapsedMs: number): num
  * Calculates Accuracy: (correctInsertions / insertedTotal) * 100
  * Returns null before first commit (insertedTotal === 0).
  */
-export function calculateAccuracy(correctInsertions: number, insertedTotal: number): number | null {
+export function calculateAccuracy(
+  correctInsertions: number,
+  insertedTotal: number
+): number | null {
   if (!Number.isFinite(insertedTotal) || insertedTotal <= 0) {
     return null;
   }
   if (!Number.isFinite(correctInsertions) || correctInsertions <= 0) {
     return 0;
   }
-  const acc = (Math.min(correctInsertions, insertedTotal) / insertedTotal) * 100;
+  const acc =
+    (Math.min(correctInsertions, insertedTotal) / insertedTotal) * 100;
   return Number.isFinite(acc) ? Math.max(0, Math.min(100, acc)) : 0;
 }
 
@@ -138,7 +159,8 @@ export function calculateRank(
 ): RankTier | null {
   if (status !== 'completed') return null;
   if (targetGraphemeCount < 150) return null;
-  if (accuracy === null || !Number.isFinite(wpm) || !Number.isFinite(accuracy)) return null;
+  if (accuracy === null || !Number.isFinite(wpm) || !Number.isFinite(accuracy))
+    return null;
 
   if (wpm >= 100 && accuracy >= 99) return 'S+';
   if (wpm >= 80 && accuracy >= 98) return 'S';
@@ -175,7 +197,10 @@ export function isPbEligible(
  * 2. Higher Accuracy (unrounded)
  * 3. Earlier startedAt timestamp
  */
-export function compareAttemptsForPB(a: AttemptRecord, b: AttemptRecord): number {
+export function compareAttemptsForPB(
+  a: AttemptRecord,
+  b: AttemptRecord
+): number {
   if (b.wpm !== a.wpm) {
     return b.wpm - a.wpm;
   }
@@ -208,16 +233,24 @@ export function selectPbAndGhost(
     .sort(compareAttemptsForPB);
 
   if (eligible.length === 0) {
-    return { pbAttempt: null, ghostAttempt: null, isGhostFallbackFromPB: false };
+    return {
+      pbAttempt: null,
+      ghostAttempt: null,
+      isGhostFallbackFromPB: false,
+    };
   }
 
   const pbAttempt = eligible[0];
   const ghostAttempt =
-    eligible.find((a) => !a.replayTruncated && Array.isArray(a.replay) && a.replay.length > 0) ||
-    null;
+    eligible.find(
+      (a) =>
+        !a.replayTruncated && Array.isArray(a.replay) && a.replay.length > 0
+    ) || null;
 
   const isGhostFallbackFromPB =
-    pbAttempt !== null && ghostAttempt !== null && pbAttempt.id !== ghostAttempt.id;
+    pbAttempt !== null &&
+    ghostAttempt !== null &&
+    pbAttempt.id !== ghostAttempt.id;
 
   return {
     pbAttempt,

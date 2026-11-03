@@ -1,6 +1,7 @@
 'use client';
+import { useDialog } from '@/hooks/useDialog';
+import { coachingTip, mistakeTargets } from '@/utils/practice';
 
-import React, { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
   AlertTriangle,
@@ -12,9 +13,10 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { formatAccuracy, RankTier, WpmSample } from '../../utils/calculations';
+import { useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useTypingStore } from '../../store/useTypingStore';
+import { formatAccuracy, RankTier, WpmSample } from '../../utils/calculations';
 
 interface ResultModalProps {
   onClose: () => void;
@@ -156,7 +158,9 @@ function WpmTimelineChart({ samples }: { samples: WpmSample[] }) {
             cx={pt.x}
             cy={pt.y}
             r={i === points.length - 1 ? 3.5 : 2}
-            className={i === points.length - 1 ? 'fill-amber-400' : 'fill-sky-400'}
+            className={
+              i === points.length - 1 ? 'fill-amber-400' : 'fill-sky-400'
+            }
           />
         ))}
       </svg>
@@ -185,20 +189,6 @@ export default function ResultModal({
     reducedMotionSystem ? targetWpm : 0
   );
 
-  // Focus primary retry action & handle Esc
-  useEffect(() => {
-    retryButtonRef.current?.focus();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   // Odometer number roll & optional Confetti in Ultra Juice mode
   useEffect(() => {
     if (reducedMotionSystem) {
@@ -220,7 +210,10 @@ export default function ResultModal({
     };
     rafId = requestAnimationFrame(step);
 
-    if (fxMode === 'ultra' && (engine.rank === 'S+' || engine.rank === 'S' || engine.rank === 'A')) {
+    if (
+      fxMode === 'ultra' &&
+      (engine.rank === 'S+' || engine.rank === 'S' || engine.rank === 'A')
+    ) {
       try {
         confetti({
           particleCount: 55,
@@ -244,14 +237,37 @@ export default function ResultModal({
     (engine.accuracy ?? 0) >= 95;
   const elapsedSec = (engine.elapsedMs / 1000).toFixed(2);
 
+  const mistakes = mistakeTargets(
+    engine.targetGraphemes,
+    engine.typedGraphemes
+  );
+  const dialogRef = useDialog(onClose);
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="result-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md"
     >
       <div className="relative w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <div className="result-coach">
+          <span className="eyebrow">BƯỚC TIẾP THEO</span>
+          <p>
+            {coachingTip(engine.accuracy, engine.remainingErrors, engine.wpm)}
+          </p>
+          {mistakes.length > 0 && (
+            <small>
+              Ký tự còn sai:{' '}
+              {mistakes
+                .map(
+                  ([char, count]) =>
+                    `${char === ' ' ? 'dấu cách' : char} (${count})`
+                )
+                .join(' · ')}
+            </small>
+          )}
+        </div>
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
           <div>
@@ -262,7 +278,8 @@ export default function ResultModal({
               Hoàn thành lượt luyện gõ
             </h2>
             <p className="mt-0.5 text-xs text-slate-400">
-              Dữ liệu kết quả được khóa chính xác tại thời điểm hoàn tất ký tự cuối cùng.
+              Dữ liệu kết quả được khóa chính xác tại thời điểm hoàn tất ký tự
+              cuối cùng.
             </p>
           </div>
           <button
@@ -278,7 +295,9 @@ export default function ResultModal({
         {/* Hero Row: Odometer WPM + Accuracy + Rank Stamp */}
         <div className="my-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <span className="text-xs font-medium text-slate-400">WPM Chính (Net)</span>
+            <span className="text-xs font-medium text-slate-400">
+              WPM Chính (Net)
+            </span>
             <div
               data-testid="result-net-wpm"
               className="mt-1 font-mono text-4xl font-bold tracking-tight text-sky-400 tabular-nums"
@@ -291,7 +310,9 @@ export default function ResultModal({
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <span className="text-xs font-medium text-slate-400">Độ chính xác (Accuracy)</span>
+            <span className="text-xs font-medium text-slate-400">
+              Độ chính xác (Accuracy)
+            </span>
             <div
               data-testid="result-accuracy"
               className="mt-1 font-mono text-4xl font-bold tracking-tight text-emerald-400 tabular-nums"
@@ -305,7 +326,9 @@ export default function ResultModal({
 
           <div className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">Hạng đánh giá</span>
+              <span className="text-xs font-medium text-slate-400">
+                Hạng đánh giá
+              </span>
               {isNewPB && (
                 <span className="flex items-center gap-1 font-mono text-xs font-semibold text-amber-300">
                   <Award className="h-3.5 w-3.5" />
@@ -321,7 +344,9 @@ export default function ResultModal({
                 >
                   {rankInfo.label}
                 </div>
-                <p className="mt-1.5 text-[11px] text-slate-400">{rankInfo.thresholdText}</p>
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  {rankInfo.thresholdText}
+                </p>
               </div>
             ) : (
               <div className="mt-2 text-xs text-slate-400">
@@ -335,11 +360,15 @@ export default function ResultModal({
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 font-mono text-xs tabular-nums">
           <div className="rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
             <div className="text-slate-400">Thời gian thực</div>
-            <div className="mt-0.5 text-sm font-semibold text-slate-100">{elapsedSec}s</div>
+            <div className="mt-0.5 text-sm font-semibold text-slate-100">
+              {elapsedSec}s
+            </div>
           </div>
           <div className="rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
             <div className="text-slate-400">Chuỗi Combo cao nhất</div>
-            <div className="mt-0.5 text-sm font-semibold text-amber-300">{engine.maxCombo}</div>
+            <div className="mt-0.5 text-sm font-semibold text-amber-300">
+              {engine.maxCombo}
+            </div>
           </div>
           <div className="rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
             <div className="text-slate-400">Ký tự khớp đích</div>
@@ -351,7 +380,9 @@ export default function ResultModal({
             <div className="text-slate-400">Lỗi chưa sửa</div>
             <div
               className={`mt-0.5 text-sm font-semibold ${
-                engine.remainingErrors > 0 ? 'text-rose-400' : 'text-emerald-400'
+                engine.remainingErrors > 0
+                  ? 'text-rose-400'
+                  : 'text-emerald-400'
               }`}
             >
               {engine.remainingErrors}
@@ -367,7 +398,9 @@ export default function ResultModal({
           {saveStatus === 'saved' && (
             <div className="flex items-center gap-2 text-emerald-400">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>Đã lưu kết quả và Ghost Replay vào Lịch sử trình duyệt.</span>
+              <span>
+                Đã lưu kết quả và Ghost Replay vào Lịch sử trình duyệt.
+              </span>
             </div>
           )}
           {saveStatus === 'saving' && (
@@ -380,7 +413,10 @@ export default function ResultModal({
             <div className="flex flex-wrap items-center justify-between gap-3 w-full text-amber-300">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-                <span>{saveErrorMessage || 'Chưa lưu được kết quả vào IndexedDB.'}</span>
+                <span>
+                  {saveErrorMessage ||
+                    'Chưa lưu được kết quả trên thiết bị này.'}
+                </span>
               </div>
               <button
                 type="button"
@@ -430,6 +466,6 @@ export default function ResultModal({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

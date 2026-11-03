@@ -5,3 +5,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+.vercel/
+.next-check/
+work/
+*.tsbuildinfo
+audit-production.json

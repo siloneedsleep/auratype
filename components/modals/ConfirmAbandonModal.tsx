@@ -1,6 +1,6 @@
 'use client';
+import { useDialog } from '@/hooks/useDialog';
 
-import React, { useEffect } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmAbandonModalProps {
@@ -18,19 +18,10 @@ export default function ConfirmAbandonModal({
   onConfirm,
   onCancel,
 }: ConfirmAbandonModalProps) {
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onCancel]);
-
+  const dialogRef = useDialog(onCancel);
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-abandon-title"
@@ -57,7 +48,9 @@ export default function ConfirmAbandonModal({
           </button>
         </div>
 
-        <p className="mt-3 text-sm leading-relaxed text-slate-300">{description}</p>
+        <p className="mt-3 text-sm leading-relaxed text-slate-300">
+          {description}
+        </p>
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
@@ -76,6 +69,6 @@ export default function ConfirmAbandonModal({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -1,4 +1,3 @@
-import { splitGraphemes } from '../utils/text';
 import {
   AttemptRecord,
   calculateAccuracy,
@@ -11,7 +10,8 @@ import {
   RULES_VERSION,
   WpmSample,
 } from '../utils/calculations';
-import { appendReplayEvent } from './replayEngine';
+import { splitGraphemes } from '../utils/text';
+import { appendReplayEvent, getGhostPositionAtTime } from './replayEngine';
 
 export interface TypingEngineState {
   status: EngineStatus;
@@ -55,7 +55,10 @@ export interface TypingEngineState {
 }
 
 export function createAttemptId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
     return crypto.randomUUID();
   }
   return `att_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -187,7 +190,9 @@ export function updateCompositionEngine(
  * Handles canceled/empty composition:
  * Per Section 7.3: "Composition bị hủy không sinh điểm; nếu chưa có commit nào thì reset timer về `ready`."
  */
-export function cancelCompositionEngine(state: TypingEngineState): TypingEngineState {
+export function cancelCompositionEngine(
+  state: TypingEngineState
+): TypingEngineState {
   if (state.status !== 'running' && state.status !== 'ready') {
     return state;
   }
@@ -239,8 +244,10 @@ export function commitGraphemesEngine(
     };
   }
 
-  const startedAtPerf = state.startedAtPerf !== null ? state.startedAtPerf : nowPerf;
-  const startedAtEpoch = state.startedAtEpoch !== null ? state.startedAtEpoch : nowEpoch;
+  const startedAtPerf =
+    state.startedAtPerf !== null ? state.startedAtPerf : nowPerf;
+  const startedAtEpoch =
+    state.startedAtEpoch !== null ? state.startedAtEpoch : nowEpoch;
   const elapsedMs = Math.max(0, nowPerf - startedAtPerf);
 
   const nextTyped = [...state.typedGraphemes];
@@ -276,7 +283,10 @@ export function commitGraphemesEngine(
       anyErrorInBatch = true;
     }
 
-    const { correctFinal: stepCorrect } = computePositionCounts(nextTyped, state.targetGraphemes);
+    const { correctFinal: stepCorrect } = computePositionCounts(
+      nextTyped,
+      state.targetGraphemes
+    );
     const replayUpdate = appendReplayEvent(replay, replayTruncated, {
       t: elapsedMs,
       index: nextTyped.length,
@@ -286,7 +296,10 @@ export function commitGraphemesEngine(
     replayTruncated = replayUpdate.truncated;
   }
 
-  const { correctFinal, remainingErrors } = computePositionCounts(nextTyped, state.targetGraphemes);
+  const { correctFinal, remainingErrors } = computePositionCounts(
+    nextTyped,
+    state.targetGraphemes
+  );
   const wpm = calculateNetWpm(correctFinal, elapsedMs);
   const grossWpm = calculateGrossWpm(insertedTotal, elapsedMs);
   const accuracy = calculateAccuracy(correctInsertions, insertedTotal);
@@ -294,7 +307,8 @@ export function commitGraphemesEngine(
   // Check if passage is completed: length equals target AND last character is correct
   const isAtEnd = nextTyped.length === targetLen;
   const isLastCharCorrect =
-    isAtEnd && nextTyped[targetLen - 1] === state.targetGraphemes[targetLen - 1];
+    isAtEnd &&
+    nextTyped[targetLen - 1] === state.targetGraphemes[targetLen - 1];
 
   const nextStatus: EngineStatus = isLastCharCorrect ? 'completed' : 'running';
 
@@ -307,7 +321,10 @@ export function commitGraphemesEngine(
     const sampleElapsedMs = lastSampleSecond * 1000;
     nextSamples.push({
       t: lastSampleSecond,
-      wpm: calculateNetWpm(correctFinal, sampleElapsedMs),
+      wpm: calculateNetWpm(
+        getGhostPositionAtTime(replay, sampleElapsedMs, targetLen).correctCount,
+        sampleElapsedMs
+      ),
     });
   }
 
@@ -385,8 +402,14 @@ export function deleteGraphemesEngine(
 
   const startedAtPerf = state.startedAtPerf ?? nowPerf;
   const elapsedMs = Math.max(0, nowPerf - startedAtPerf);
-  const nextTyped = state.typedGraphemes.slice(0, state.typedGraphemes.length - actualCount);
-  const { correctFinal, remainingErrors } = computePositionCounts(nextTyped, state.targetGraphemes);
+  const nextTyped = state.typedGraphemes.slice(
+    0,
+    state.typedGraphemes.length - actualCount
+  );
+  const { correctFinal, remainingErrors } = computePositionCounts(
+    nextTyped,
+    state.targetGraphemes
+  );
 
   const replayUpdate = appendReplayEvent(state.replay, state.replayTruncated, {
     t: elapsedMs,
@@ -433,7 +456,10 @@ export function countGraphemesForWordDelete(typedGraphemes: string[]): number {
 /**
  * Updates live timer & 1s WPM samples during an active run without mutating input state.
  */
-export function tickEngineTimer(state: TypingEngineState, nowPerf: number): TypingEngineState {
+export function tickEngineTimer(
+  state: TypingEngineState,
+  nowPerf: number
+): TypingEngineState {
   if (state.status !== 'running' || state.startedAtPerf === null) {
     return state;
   }
@@ -451,7 +477,14 @@ export function tickEngineTimer(state: TypingEngineState, nowPerf: number): Typi
       lastSampleSecond += 1;
       nextSamples.push({
         t: lastSampleSecond,
-        wpm: calculateNetWpm(state.correctFinal, lastSampleSecond * 1000),
+        wpm: calculateNetWpm(
+          getGhostPositionAtTime(
+            state.replay,
+            lastSampleSecond * 1000,
+            state.targetGraphemes.length
+          ).correctCount,
+          lastSampleSecond * 1000
+        ),
       });
     }
   }
@@ -480,7 +513,10 @@ export function interruptEngineAttempt(
   if (state.status !== 'running') {
     return state;
   }
-  const elapsedMs = state.startedAtPerf !== null ? Math.max(0, nowPerf - state.startedAtPerf) : state.elapsedMs;
+  const elapsedMs =
+    state.startedAtPerf !== null
+      ? Math.max(0, nowPerf - state.startedAtPerf)
+      : state.elapsedMs;
   const wpm = calculateNetWpm(state.correctFinal, elapsedMs);
   const grossWpm = calculateGrossWpm(state.insertedTotal, elapsedMs);
 
@@ -501,7 +537,9 @@ export function interruptEngineAttempt(
 /**
  * Builds an AttemptRecord from the current engine state for saving to IndexedDB.
  */
-export function buildAttemptRecordFromState(state: TypingEngineState): AttemptRecord | null {
+export function buildAttemptRecordFromState(
+  state: TypingEngineState
+): AttemptRecord | null {
   if (state.status !== 'completed' && state.status !== 'interrupted') {
     return null;
   }

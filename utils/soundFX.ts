@@ -11,7 +11,8 @@ class SoundFXManager {
     if (typeof window === 'undefined') return null;
     const AudioCtx =
       window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
     if (!AudioCtx) return null;
 
     if (!this.ctx) {
@@ -53,7 +54,8 @@ class SoundFXManager {
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const masterGainValue = Math.min(1, Math.max(0, volumePercent / 100)) * 0.35;
+    const masterGainValue =
+      Math.min(1, Math.max(0, volumePercent / 100)) * 0.35;
     if (masterGainValue <= 0.001) return;
 
     this.activeCount++;
@@ -147,7 +149,8 @@ class SoundFXManager {
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const masterGainValue = Math.min(1, Math.max(0, volumePercent / 100)) * 0.22;
+    const masterGainValue =
+      Math.min(1, Math.max(0, volumePercent / 100)) * 0.22;
     if (masterGainValue <= 0.001) return;
 
     const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6

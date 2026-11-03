@@ -2,7 +2,10 @@ export type Language = 'en' | 'vi';
 export type Topic = 'code' | 'philosophy' | 'scifi';
 export type PassageLength = 'short' | 'medium' | 'long';
 
-export const LENGTH_BOUNDS: Record<PassageLength, { min: number; max: number; label: string }> = {
+export const LENGTH_BOUNDS: Record<
+  PassageLength,
+  { min: number; max: number; label: string }
+> = {
   short: { min: 150, max: 300, label: 'Short (150–300)' },
   medium: { min: 400, max: 700, label: 'Medium (400–700)' },
   long: { min: 900, max: 1400, label: 'Long (900–1400)' },
@@ -79,12 +82,22 @@ export function validatePassageText(
   lengthTarget?: PassageLength
 ): TextValidationResult {
   if (typeof rawText !== 'string') {
-    return { valid: false, reason: 'Nội dung không phải chuỗi hợp lệ.', normalizedText: '', graphemeCount: 0 };
+    return {
+      valid: false,
+      reason: 'Nội dung không phải chuỗi hợp lệ.',
+      normalizedText: '',
+      graphemeCount: 0,
+    };
   }
 
   const nfc = normalizeNFC(rawText.trim());
   if (!nfc) {
-    return { valid: false, reason: 'Nội dung trống.', normalizedText: '', graphemeCount: 0 };
+    return {
+      valid: false,
+      reason: 'Nội dung trống.',
+      normalizedText: '',
+      graphemeCount: 0,
+    };
   }
 
   if (/[\r\n\t]/.test(nfc)) {
@@ -137,10 +150,10 @@ export function validatePassageText(
         graphemeCount,
       };
     }
-  } else if (graphemeCount < 1) {
+  } else if (graphemeCount < 150 || graphemeCount > 1400) {
     return {
       valid: false,
-      reason: 'Nội dung quá ngắn.',
+      reason: 'Nội dung cần từ 150 đến 1.400 ký tự.',
       normalizedText,
       graphemeCount,
     };
@@ -156,7 +169,10 @@ export function validatePassageText(
 /**
  * Computes a deterministic contentHash from language + NFC normalized text.
  */
-export function computeContentHash(content: string, language: Language): string {
+export function computeContentHash(
+  content: string,
+  language: Language
+): string {
   const normalized = `${language}:${normalizeSpaces(content)}`;
   let h1 = 0xdeadbeef ^ normalized.length;
   let h2 = 0x41c6ce57 ^ normalized.length;
@@ -165,8 +181,12 @@ export function computeContentHash(content: string, language: Language): string 
     h1 = Math.imul(h1 ^ ch, 2654435761);
     h2 = Math.imul(h2 ^ ch, 1597334677);
   }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return `h_${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0).toString(16).padStart(8, '0')}`;
 }
 
@@ -267,6 +287,49 @@ export const SAMPLE_PASSAGES: SamplePassageDef[] = [
   },
 ];
 
+const TOPIC_SENTENCES: Record<Language, Record<Topic, string[]>> = {
+  vi: {
+    philosophy: [
+      'Một nhịp thở chậm giúp ta nhìn rõ những điều tưởng chừng rất nhỏ.',
+      'Sự kiên nhẫn được xây bằng từng lựa chọn bình dị trong ngày.',
+      'Khi thả lỏng đôi tay và giữ sự chú ý, mỗi phím gõ trở thành một bước tiến.',
+      'Không cần vội vàng, ta vẫn có thể đi xa bằng những bước đều đặn.',
+    ],
+    scifi: [
+      'Trạm quan sát thức giấc dưới ánh sáng xanh của một hành tinh xa lạ.',
+      'Người hoa tiêu ghi lại những tín hiệu đầu tiên từ vùng không gian chưa có tên.',
+      'Bên ngoài cửa kính, hàng nghìn ngôi sao lặng lẽ soi đường cho chuyến đi.',
+      'Cả đoàn giữ liên lạc với Trái Đất qua những dòng chữ ngắn và chính xác.',
+    ],
+    code: [
+      'Một chương trình dễ hiểu bắt đầu từ cách đặt tên rõ ràng cho từng giá trị.',
+      'Lập trình viên chia công việc lớn thành những hàm nhỏ có trách nhiệm cụ thể.',
+      'Mỗi lần kiểm thử giúp nhóm phát hiện lỗi trước khi thay đổi đến tay người dùng.',
+      'Mã nguồn tốt kể lại ý định của người viết bằng cấu trúc giản dị và nhất quán.',
+    ],
+  },
+  en: {
+    philosophy: [
+      'A quiet moment can reveal the shape of a thought before it becomes a decision.',
+      'Patience grows through the small choices we make each day.',
+      'Let your hands relax and give each word the attention it deserves.',
+      'Steady practice turns a difficult movement into a familiar rhythm.',
+    ],
+    scifi: [
+      'The observation station awoke beneath the pale light of a distant planet.',
+      'Our navigator recorded the first signals from a region without a name.',
+      'Beyond the window, a thousand stars marked the quiet passage of our ship.',
+      'The crew sent a short message home and waited for the light to return.',
+    ],
+    code: [
+      'Readable software begins with clear names and a single purpose for each function.',
+      'The developer divides a large problem into small and testable steps.',
+      'A useful test describes the behavior that a person expects from the application.',
+      'Simple structures make it easier for the next reader to understand every choice.',
+    ],
+  },
+};
+
 export function getSamplePassage(
   language: Language,
   topic: Topic,
@@ -276,12 +339,18 @@ export function getSamplePassage(
     (p) => p.language === language && p.topic === topic && p.length === length
   );
   if (exact) return exact;
-
-  const sameLangAndLength = SAMPLE_PASSAGES.find(
-    (p) => p.language === language && p.length === length
-  );
-  if (sameLangAndLength) return sameLangAndLength;
-
-  const sameLang = SAMPLE_PASSAGES.find((p) => p.language === language);
-  return sameLang || SAMPLE_PASSAGES[0];
+  const bounds = LENGTH_BOUNDS[length];
+  const sentences = TOPIC_SENTENCES[language][topic];
+  let content = '',
+    i = 0;
+  while (countGraphemes(content) < bounds.min) {
+    content += (content ? ' ' : '') + sentences[i++ % sentences.length];
+  }
+  return {
+    id: `sample-${language}-${topic}-${length}-v2`,
+    language,
+    topic,
+    length,
+    content,
+  };
 }

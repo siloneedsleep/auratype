@@ -24,12 +24,20 @@ export function createRateLimitStore(): RateLimitStore {
   };
 }
 
-export function resolveEffectiveCooldownMs(personalCooldownSec?: number): number {
-  if (typeof personalCooldownSec !== 'number' || !Number.isFinite(personalCooldownSec)) {
+export function resolveEffectiveCooldownMs(
+  personalCooldownSec?: number
+): number {
+  if (
+    typeof personalCooldownSec !== 'number' ||
+    !Number.isFinite(personalCooldownSec)
+  ) {
     return SERVER_MIN_COOLDOWN_MS;
   }
   const requestedMs = Math.round(personalCooldownSec * 1000);
-  return Math.max(SERVER_MIN_COOLDOWN_MS, Math.min(SERVER_MAX_COOLDOWN_MS, requestedMs));
+  return Math.max(
+    SERVER_MIN_COOLDOWN_MS,
+    Math.min(SERVER_MAX_COOLDOWN_MS, requestedMs)
+  );
 }
 
 export type RateLimitCheckResult =
@@ -67,7 +75,10 @@ export function acquireGenerationSlot(
     store.hourlyCount = 0;
   }
 
-  const client = store.clients.get(clientKey) || { nextAllowedAt: 0, inFlight: false };
+  const client = store.clients.get(clientKey) || {
+    nextAllowedAt: 0,
+    inFlight: false,
+  };
 
   if (client.inFlight) {
     const retryAfterMs = Math.max(1000, client.nextAllowedAt - serverNow);
@@ -98,7 +109,8 @@ export function acquireGenerationSlot(
     return {
       allowed: false,
       status: 429,
-      reason: 'Máy chủ đang xử lý tối đa số yêu cầu đồng thời. Vui lòng thử lại sau ít giây.',
+      reason:
+        'Máy chủ đang xử lý tối đa số yêu cầu đồng thời. Vui lòng thử lại sau ít giây.',
       serverNow,
       nextAllowedAt,
       retryAfterMs: 5000,
@@ -110,7 +122,8 @@ export function acquireGenerationSlot(
     return {
       allowed: false,
       status: 429,
-      reason: 'Đã đạt hạn mức tạo bài chung trong giờ. Bạn vẫn có thể luyện tập với kho bài mẫu và lịch sử.',
+      reason:
+        'Đã đạt hạn mức tạo bài chung trong giờ. Bạn vẫn có thể luyện tập với kho bài mẫu và lịch sử.',
       serverNow,
       nextAllowedAt,
       retryAfterMs: Math.max(1000, nextAllowedAt - serverNow),
@@ -135,7 +148,10 @@ export function acquireGenerationSlot(
   };
 }
 
-export function releaseGenerationSlot(store: RateLimitStore, clientKey: string): void {
+export function releaseGenerationSlot(
+  store: RateLimitStore,
+  clientKey: string
+): void {
   store.activeGlobalCount = Math.max(0, store.activeGlobalCount - 1);
   const client = store.clients.get(clientKey);
   if (client) {

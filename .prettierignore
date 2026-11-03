@@ -1,0 +1,6 @@
+.next
+.next-check
+node_modules
+work
+package-lock.json
+bun.lock

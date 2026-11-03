@@ -1,7 +1,5 @@
 'use client';
 
-import React from 'react';
-
 export interface CaretVisualPosition {
   x: number;
   y: number;
@@ -17,6 +15,7 @@ interface CaretProps {
   cometTrailEnabled: boolean;
   fxMode: 'lite' | 'ultra';
   reducedMotion: boolean;
+  ghostLabel?: string;
 }
 
 /**
@@ -53,13 +52,17 @@ export default function Caret({
   cometTrailEnabled,
   fxMode,
   reducedMotion,
+  ghostLabel = 'PB',
 }: CaretProps) {
   const { barClass, trailClass } = getCometStyle(wpm);
   // Section 11: Disable transition when wrapping across lines or in reduced motion so caret never lags
   const shouldAnimateMove = !reducedMotion && !userPos.lineChanged;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
+    <div
+      className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
+      aria-hidden="true"
+    >
       {/* Ghost Caret (PB Replay) */}
       {ghostPos && (
         <div
@@ -76,7 +79,7 @@ export default function Caret({
         >
           <div className="h-full w-[2.5px] rounded-full bg-teal-400/55 border border-teal-300/40" />
           <span className="absolute -top-4 left-0 -translate-x-1/4 rounded bg-slate-900/90 px-1 py-0.5 font-mono text-[9px] font-semibold tracking-tight text-teal-300 border border-teal-500/30 whitespace-nowrap">
-            PB
+            {ghostLabel}
           </span>
         </div>
       )}
@@ -93,11 +96,14 @@ export default function Caret({
         }}
       >
         {/* Optional Comet Trail */}
-        {cometTrailEnabled && fxMode === 'ultra' && isRunning && !reducedMotion && (
-          <div
-            className={`absolute top-1 right-0 h-[calc(100%-8px)] w-6 bg-gradient-to-l ${trailClass} rounded-l-full pointer-events-none`}
-          />
-        )}
+        {cometTrailEnabled &&
+          fxMode === 'ultra' &&
+          isRunning &&
+          !reducedMotion && (
+            <div
+              className={`absolute top-1 right-0 h-[calc(100%-8px)] w-6 bg-gradient-to-l ${trailClass} rounded-l-full pointer-events-none`}
+            />
+          )}
         <div
           className={`h-full w-[2.5px] rounded-full ${barClass} ${
             !isRunning && !reducedMotion ? 'animate-pulse' : ''

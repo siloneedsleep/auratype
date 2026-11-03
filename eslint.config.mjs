@@ -1,11 +1,20 @@
-import { defineConfig } from "eslint/config";
-import next from "eslint-config-next";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import js from '@eslint/js';
+import { FlatCompat } from '@eslint/eslintrc';
+const compat = new FlatCompat({
+  baseDirectory: import.meta.dirname,
+  recommendedConfig: js.configs.recommended,
+});
+const config = [
+  {
+    ignores: [
+      '.next/**',
+      '.next-check/**',
+      'work/**',
+      'node_modules/**',
+      'next-env.d.ts',
+    ],
+  },
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+];
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-export default defineConfig([{
-    extends: [...next],
-}]);
+export default config;

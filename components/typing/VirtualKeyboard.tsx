@@ -1,7 +1,5 @@
 'use client';
 
-import React from 'react';
-
 interface KeyDef {
   id: string;
   label: string;
@@ -119,8 +117,8 @@ export default function VirtualKeyboard({
     lastKeyPressed === 'Backspace'
       ? 'Backspace'
       : lastKeyPressed
-      ? normalizeExpectedKey(lastKeyPressed)
-      : null;
+        ? normalizeExpectedKey(lastKeyPressed)
+        : null;
 
   return (
     <div

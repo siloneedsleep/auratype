@@ -1,6 +1,6 @@
 'use client';
+import { useDialog } from '@/hooks/useDialog';
 
-import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,14 +14,15 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { useSettingsStore } from '../../store/useSettingsStore';
-import { useTypingStore } from '../../store/useTypingStore';
+import React, { useRef, useState } from 'react';
 import {
   createExportBundle,
   MAX_IMPORT_BYTES,
   PreparedImportPlan,
   validateAndPrepareImport,
 } from '../../services/dataTransfer';
+import { useSettingsStore } from '../../store/useSettingsStore';
+import { useTypingStore } from '../../store/useTypingStore';
 import { soundFX, SoundProfile } from '../../utils/soundFX';
 import { Language, PassageLength, Topic } from '../../utils/text';
 
@@ -49,22 +50,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     plan: PreparedImportPlan;
     importedSettings?: Record<string, unknown>;
   } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'clear_history' | 'factory_reset' | null>(
-    null
-  );
+  const [confirmAction, setConfirmAction] = useState<
+    'clear_history' | 'factory_reset' | null
+  >(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   const handleExportJson = () => {
     const bundle = createExportBundle(passages, attempts, {
@@ -150,8 +140,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     setPendingPlan(null);
   };
 
+  const dialogRef = useDialog(onClose);
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-modal-title"
@@ -183,9 +175,24 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Tabs Navigation */}
         <div
+          onKeyDown={(e) => {
+            const ids: SettingsTab[] = ['visuals', 'acoustic', 'ai', 'data'];
+            let next = ids.indexOf(activeTab);
+            if (e.key === 'ArrowRight') next = (next + 1) % ids.length;
+            else if (e.key === 'ArrowLeft')
+              next = (next + ids.length - 1) % ids.length;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = ids.length - 1;
+            else return;
+            e.preventDefault();
+            setActiveTab(ids[next]);
+            e.currentTarget
+              .querySelectorAll<HTMLButtonElement>('[role="tab"]')
+              [next]?.focus();
+          }}
           role="tablist"
           aria-label="Các mục cài đặt"
-          className="flex border-b border-slate-800 bg-slate-950/50 px-6"
+          className="flex overflow-x-auto border-b border-slate-800 bg-slate-950/50 px-6"
         >
           {(
             [
@@ -201,6 +208,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               <button
                 key={tab.id}
                 role="tab"
+                id={`settings-tab-${tab.id}`}
+                aria-controls="settings-panel"
+                tabIndex={isSelected ? 0 : -1}
                 type="button"
                 aria-selected={isSelected}
                 onClick={() => setActiveTab(tab.id)}
@@ -218,12 +228,19 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Tab Panels */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div
+          role="tabpanel"
+          id="settings-panel"
+          aria-labelledby={`settings-tab-${activeTab}`}
+          className="flex-1 overflow-y-auto p-6 space-y-5"
+        >
           {activeTab === 'visuals' && (
             <div className="space-y-4">
               {settings.reducedMotionSystem && (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-200">
-                  Hệ điều hành đang bật <code>prefers-reduced-motion</code>. Các hiệu ứng chuyển động mạnh và pháo giấy được tự động giảm thiểu.
+                  Hệ điều hành đang bật <code>prefers-reduced-motion</code>. Các
+                  hiệu ứng chuyển động mạnh và pháo giấy được tự động giảm
+                  thiểu.
                 </div>
               )}
 
@@ -233,7 +250,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     Chế độ Hiệu ứng (FX Mode)
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    Lite/Zen tối ưu độ ổn định; Ultra Juice bật hạt bụi Canvas, Shockwave và pháo giấy.
+                    Lite/Zen tối ưu độ ổn định; Ultra Juice bật hạt bụi Canvas,
+                    Shockwave và pháo giấy.
                   </div>
                 </div>
                 <div className="flex rounded-lg border border-slate-800 bg-slate-900 p-1">
@@ -268,7 +286,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     Hiển thị Ghost Caret (Đua với kỷ lục PB)
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    Hiển thị con trỏ bóng mờ chạy theo đúng timeline của lượt PB hợp lệ tốt nhất.
+                    Hiển thị con trỏ bóng mờ chạy theo đúng timeline của lượt PB
+                    hợp lệ tốt nhất.
                   </div>
                 </div>
                 <input
@@ -285,13 +304,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     Rung nhẹ màn hình khi gãy chuỗi Combo
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    Tùy chọn độc lập. Có thể tắt hoàn toàn ngay cả khi đang bật Ultra Juice.
+                    Tùy chọn độc lập. Có thể tắt hoàn toàn ngay cả khi đang bật
+                    Ultra Juice.
                   </div>
                 </div>
                 <input
                   type="checkbox"
                   checked={settings.screenShakeEnabled}
-                  onChange={(e) => settings.setScreenShakeEnabled(e.target.checked)}
+                  onChange={(e) =>
+                    settings.setScreenShakeEnabled(e.target.checked)
+                  }
                   className="h-4 w-4 accent-sky-400"
                 />
               </label>
@@ -308,7 +330,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 <input
                   type="checkbox"
                   checked={settings.cometTrailEnabled}
-                  onChange={(e) => settings.setCometTrailEnabled(e.target.checked)}
+                  onChange={(e) =>
+                    settings.setCometTrailEnabled(e.target.checked)
+                  }
                   className="h-4 w-4 accent-sky-400"
                 />
               </label>
@@ -319,13 +343,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     Bàn phím ảo 2.5D bên dưới
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    Gợi ý phím tiếp theo và phản hồi nhấn phím trực quan trên màn hình.
+                    Gợi ý phím tiếp theo và phản hồi nhấn phím trực quan trên
+                    màn hình.
                   </div>
                 </div>
                 <input
                   type="checkbox"
                   checked={settings.virtualKeyboardEnabled}
-                  onChange={(e) => settings.setVirtualKeyboardEnabled(e.target.checked)}
+                  onChange={(e) =>
+                    settings.setVirtualKeyboardEnabled(e.target.checked)
+                  }
                   className="h-4 w-4 accent-sky-400"
                 />
               </label>
@@ -340,7 +367,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     Âm thanh cơ học Web Audio API
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    Tổng hợp âm thanh trực tiếp không độ trễ khi chốt ký tự. Tắt có hiệu lực tức thì.
+                    Tổng hợp âm thanh trực tiếp không độ trễ khi chốt ký tự. Tắt
+                    có hiệu lực tức thì.
                   </div>
                 </div>
                 <input
@@ -380,9 +408,21 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 <div className="mt-3 grid grid-cols-3 gap-2.5">
                   {(
                     [
-                      { id: 'creamy', name: 'Creamy Linear', desc: 'Êm, tròn âm, tần số trung' },
-                      { id: 'thock', name: 'Deep Thock', desc: 'Trầm ấm, dày, PBT keycap' },
-                      { id: 'typewriter', name: 'Typewriter', desc: 'Đanh sắc, cổ điển rõ nhịp' },
+                      {
+                        id: 'creamy',
+                        name: 'Creamy Linear',
+                        desc: 'Êm, tròn âm, tần số trung',
+                      },
+                      {
+                        id: 'thock',
+                        name: 'Deep Thock',
+                        desc: 'Trầm ấm, dày, PBT keycap',
+                      },
+                      {
+                        id: 'typewriter',
+                        name: 'Typewriter',
+                        desc: 'Đanh sắc, cổ điển rõ nhịp',
+                      },
                     ] as { id: SoundProfile; name: string; desc: string }[]
                   ).map((p) => (
                     <button
@@ -404,7 +444,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                       }`}
                     >
                       <div className="text-xs font-semibold">{p.name}</div>
-                      <div className="mt-0.5 text-[11px] text-slate-400">{p.desc}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-400">
+                        {p.desc}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -412,7 +454,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
               <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
                 <div className="flex items-center justify-between text-sm font-semibold text-slate-100">
-                  <label htmlFor="sound-volume-range">Âm lượng ({settings.soundVolume}%)</label>
+                  <label htmlFor="sound-volume-range">
+                    Âm lượng ({settings.soundVolume}%)
+                  </label>
                   <span className="font-mono text-xs text-sky-300 tabular-nums">
                     {settings.soundVolume}%
                   </span>
@@ -424,7 +468,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   max={100}
                   step={5}
                   value={settings.soundVolume}
-                  onChange={(e) => settings.setSoundVolume(Number(e.target.value))}
+                  onChange={(e) =>
+                    settings.setSoundVolume(Number(e.target.value))
+                  }
                   className="mt-3 w-full accent-sky-400"
                 />
               </div>
@@ -470,12 +516,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     <select
                       id="setting-topic"
                       value={settings.topic}
-                      onChange={(e) => settings.setTopic(e.target.value as Topic)}
+                      onChange={(e) =>
+                        settings.setTopic(e.target.value as Topic)
+                      }
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
                     >
                       <option value="philosophy">Triết học (Philosophy)</option>
                       <option value="code">Mã nguồn (Code)</option>
-                      <option value="scifi">Khoa học viễn tưởng (Sci-Fi)</option>
+                      <option value="scifi">
+                        Khoa học viễn tưởng (Sci-Fi)
+                      </option>
                     </select>
                   </div>
 
@@ -489,7 +539,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     <select
                       id="setting-length"
                       value={settings.length}
-                      onChange={(e) => settings.setLength(e.target.value as PassageLength)}
+                      onChange={(e) =>
+                        settings.setLength(e.target.value as PassageLength)
+                      }
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
                     >
                       <option value="short">Short (150–300 ký tự)</option>
@@ -503,7 +555,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   <button
                     type="button"
                     onClick={() =>
-                      loadSampleForCriteria(settings.language, settings.topic, settings.length)
+                      loadSampleForCriteria(
+                        settings.language,
+                        settings.topic,
+                        settings.length
+                      )
                     }
                     className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-slate-700 cursor-pointer"
                   >
@@ -525,7 +581,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">
-                  Mức sàn bảo vệ máy chủ là 30 giây. Thời gian áp dụng thực tế là giá trị lớn hơn giữa cài đặt cá nhân và giới hạn máy chủ.
+                  Mức sàn bảo vệ máy chủ là 30 giây. Thời gian áp dụng thực tế
+                  là giá trị lớn hơn giữa cài đặt cá nhân và giới hạn máy chủ.
                 </p>
                 <input
                   id="cooldown-range"
@@ -534,13 +591,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   max={60}
                   step={5}
                   value={settings.personalCooldownSec}
-                  onChange={(e) => settings.setPersonalCooldownSec(Number(e.target.value))}
+                  onChange={(e) =>
+                    settings.setPersonalCooldownSec(Number(e.target.value))
+                  }
                   className="mt-3 w-full accent-sky-400"
                 />
               </div>
 
               <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3.5 text-xs text-slate-400">
-                Bảo mật API: Khóa kết nối AI được quản lý hoàn toàn ở phía máy chủ. Ứng dụng không lưu trữ hay xuất khóa bí mật ở trình duyệt.
+                Bảo mật API: Khóa kết nối AI được quản lý hoàn toàn ở phía máy
+                chủ. Ứng dụng không lưu trữ hay xuất khóa bí mật ở trình duyệt.
               </div>
             </div>
           )}
@@ -553,7 +613,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   Sao lưu & Khôi phục dữ liệu (JSON)
                 </div>
                 <p className="text-xs text-slate-400">
-                  File xuất chứa toàn bộ bài luyện, lịch sử attempts, Ghost Replay và cài đặt không nhạy cảm. Khi nhập (tối đa 10MB), hệ thống tự động tính lại WPM/Rank từ bộ đếm gốc và không ghi đè dữ liệu hiện có.
+                  File xuất chứa toàn bộ bài luyện, lịch sử attempts, Ghost
+                  Replay và cài đặt không nhạy cảm. Khi nhập (tối đa 10MB), hệ
+                  thống tự động tính lại WPM/Rank từ bộ đếm gốc và không ghi đè
+                  dữ liệu hiện có.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -600,14 +663,25 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 {pendingPlan && (
                   <div className="mt-3 rounded-xl border border-sky-500/40 bg-sky-950/30 p-4 space-y-2.5 text-xs">
                     <div className="font-semibold text-sky-200">
-                      Kiểm tra file hợp lệ — Xác nhận trước khi ghi vào cơ sở dữ liệu:
+                      Kiểm tra file hợp lệ — Xác nhận trước khi ghi vào cơ sở dữ
+                      liệu:
                     </div>
                     <ul className="space-y-1 font-mono text-slate-300 tabular-nums">
                       <li>
-                        • Bài mới sẽ thêm: <strong>{pendingPlan.plan.passagesToInsert.length}</strong> (đổi ID do trùng: {pendingPlan.plan.passagesRemappedCount}, bỏ qua trùng: {pendingPlan.plan.passagesSkippedCount})
+                        • Bài mới sẽ thêm:{' '}
+                        <strong>
+                          {pendingPlan.plan.passagesToInsert.length}
+                        </strong>{' '}
+                        (đổi ID do trùng:{' '}
+                        {pendingPlan.plan.passagesRemappedCount}, bỏ qua trùng:{' '}
+                        {pendingPlan.plan.passagesSkippedCount})
                       </li>
                       <li>
-                        • Lượt gõ sẽ thêm: <strong>{pendingPlan.plan.attemptsToInsert.length}</strong> (bỏ qua trùng: {pendingPlan.plan.attemptsSkippedCount})
+                        • Lượt gõ sẽ thêm:{' '}
+                        <strong>
+                          {pendingPlan.plan.attemptsToInsert.length}
+                        </strong>{' '}
+                        (bỏ qua trùng: {pendingPlan.plan.attemptsSkippedCount})
                       </li>
                     </ul>
                     <div className="flex items-center gap-2 pt-1">
@@ -692,6 +766,6 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

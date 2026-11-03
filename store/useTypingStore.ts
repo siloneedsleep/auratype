@@ -4,7 +4,6 @@ import {
   cancelCompositionEngine,
   commitGraphemesEngine,
   createAttemptId,
-  createInitialEngineState,
   deleteGraphemesEngine,
   initReadyState,
   interruptEngineAttempt,
@@ -13,20 +12,7 @@ import {
   TypingEngineState,
   updateCompositionEngine,
 } from '../engine/typingEngine';
-import {
-  AttemptRecord,
-  PassageRecord,
-  PROMPT_VERSION,
-  selectPbAndGhost,
-} from '../utils/calculations';
-import {
-  computeContentHash,
-  getSamplePassage,
-  Language,
-  PassageLength,
-  SAMPLE_PASSAGES,
-  Topic,
-} from '../utils/text';
+import { PreparedImportPlan } from '../services/dataTransfer';
 import {
   clearAllHistory,
   deletePassageAndAttempts,
@@ -40,11 +26,25 @@ import {
 import {
   fetchAiProviderStatus,
   loadRemainingCooldownMs,
-   requestAiPassage,
+  requestAiPassage,
   RequestSequenceTracker,
 } from '../services/llmService';
-import { PreparedImportPlan } from '../services/dataTransfer';
+import {
+  AttemptRecord,
+  PassageRecord,
+  PROMPT_VERSION,
+  selectPbAndGhost,
+} from '../utils/calculations';
 import { soundFX } from '../utils/soundFX';
+import {
+  computeContentHash,
+  getSamplePassage,
+  Language,
+  PassageLength,
+  SAMPLE_PASSAGES,
+  Topic,
+  validatePassageText,
+} from '../utils/text';
 import { useSettingsStore } from './useSettingsStore';
 
 const aiSeqTracker = new RequestSequenceTracker();
@@ -92,9 +92,14 @@ export interface TypingStoreState {
 
   // Actions
   initializeStudio: () => Promise<void>;
-  loadSampleForCriteria: (language: Language, topic: Topic, length: PassageLength) => Promise<void>;
+  loadSampleForCriteria: (
+    language: Language,
+    topic: Topic,
+    length: PassageLength
+  ) => Promise<void>;
   selectPassageById: (passageId: string) => Promise<void>;
   retryCurrentPassage: () => void;
+  loadCustomPassage: (content: string) => Promise<void>;
 
   // Input actions
   onCompositionStart: (nowPerf: number) => void;
@@ -113,7 +118,9 @@ export interface TypingStoreState {
   deletePassageFromHistory: (passageId: string) => Promise<void>;
   clearHistoryOnly: () => Promise<void>;
   fullFactoryReset: () => Promise<void>;
-  commitImportPlan: (plan: PreparedImportPlan) => Promise<{ ok: boolean; error?: string }>;
+  commitImportPlan: (
+    plan: PreparedImportPlan
+  ) => Promise<{ ok: boolean; error?: string }>;
 
   // AI Generation & Cooldown
   triggerAiGeneration: () => Promise<void>;
@@ -123,7 +130,10 @@ export interface TypingStoreState {
 }
 
 const defaultSample = SAMPLE_PASSAGES[0];
-const defaultHash = computeContentHash(defaultSample.content, defaultSample.language);
+const defaultHash = computeContentHash(
+  defaultSample.content,
+  defaultSample.language
+);
 const defaultPassageRecord: PassageRecord = {
   id: defaultSample.id,
   content: defaultSample.content,
@@ -160,7 +170,7 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
   screenShakeSeq: 0,
   lastKeyPressed: null,
 
-  aiReady: true,
+  aiReady: false,
   aiNotReadyReason: null,
   aiGenerating: false,
   aiError: null,
@@ -178,7 +188,10 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
     if (savedCooldown.remainingMs > 0) {
       set({
         cooldownRemainingMs: savedCooldown.remainingMs,
-        cooldownTotalMs: Math.max(30_000, hydratedSettings.personalCooldownSec * 1000),
+        cooldownTotalMs: Math.max(
+          30_000,
+          hydratedSettings.personalCooldownSec * 1000
+        ),
       });
     }
 
@@ -196,7 +209,10 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
       currentState.currentPassage?.id !== defaultPassageRecord.id;
 
     if (userAlreadyInteracted && currentState.currentPassage) {
-      const pbGhost = selectPbAndGhost(attempts, currentState.currentPassage.contentHash);
+      const pbGhost = selectPbAndGhost(
+        attempts,
+        currentState.currentPassage.contentHash
+      );
       set({
         passages,
         attempts,
@@ -211,19 +227,23 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
         latestSettings.topic,
         latestSettings.length
       );
-      const contentHash = computeContentHash(sampleDef.content, sampleDef.language);
-      const initialPassage: PassageRecord =
-        passages.find((p) => p.id === sampleDef.id) || {
-          id: sampleDef.id,
-          content: sampleDef.content,
-          contentHash,
-          language: sampleDef.language,
-          topic: sampleDef.topic,
-          length: sampleDef.length,
-          source: 'sample',
-          createdAt: Date.now(),
-          promptVersion: PROMPT_VERSION,
-        };
+      const contentHash = computeContentHash(
+        sampleDef.content,
+        sampleDef.language
+      );
+      const initialPassage: PassageRecord = passages.find(
+        (p) => p.id === sampleDef.id
+      ) || {
+        id: sampleDef.id,
+        content: sampleDef.content,
+        contentHash,
+        language: sampleDef.language,
+        topic: sampleDef.topic,
+        length: sampleDef.length,
+        source: 'sample',
+        createdAt: Date.now(),
+        promptVersion: PROMPT_VERSION,
+      };
 
       await savePassageRecord(initialPassage);
       const pbGhost = selectPbAndGhost(attempts, initialPassage.contentHash);
@@ -240,7 +260,11 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
           currentState.currentPassage?.id === initialPassage.id &&
           currentState.engine.status === 'ready'
             ? currentState.engine
-            : initReadyState(initialPassage.id, initialPassage.content, initialPassage.contentHash),
+            : initReadyState(
+                initialPassage.id,
+                initialPassage.content,
+                initialPassage.contentHash
+              ),
       });
     }
 
@@ -266,8 +290,13 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
   },
 
   loadSampleForCriteria: async (language, topic, length) => {
+    aiSeqTracker.cancelCurrent();
+    set({ aiGenerating: false, aiError: null });
     const sampleDef = getSamplePassage(language, topic, length);
-    const contentHash = computeContentHash(sampleDef.content, sampleDef.language);
+    const contentHash = computeContentHash(
+      sampleDef.content,
+      sampleDef.language
+    );
     const passageRecord: PassageRecord = {
       id: sampleDef.id,
       content: sampleDef.content,
@@ -292,7 +321,11 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
       pbAttempt: pbGhost.pbAttempt,
       ghostAttempt: pbGhost.ghostAttempt,
       isGhostFallbackFromPB: pbGhost.isGhostFallbackFromPB,
-      engine: initReadyState(passageRecord.id, passageRecord.content, passageRecord.contentHash),
+      engine: initReadyState(
+        passageRecord.id,
+        passageRecord.content,
+        passageRecord.contentHash
+      ),
       saveStatus: 'idle',
       saveErrorMessage: null,
       unsavedAttempt: null,
@@ -303,6 +336,8 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
   },
 
   selectPassageById: async (passageId) => {
+    aiSeqTracker.cancelCurrent();
+    set({ aiGenerating: false, aiError: null });
     const { passages, attempts } = await loadAllHistoryData();
     const target = passages.find((p) => p.id === passageId);
     if (!target) return;
@@ -319,6 +354,40 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
       saveStatus: 'idle',
       saveErrorMessage: null,
       unsavedAttempt: null,
+      inputNotice: null,
+      isRevealingText: false,
+    });
+  },
+
+  loadCustomPassage: async (content) => {
+    aiSeqTracker.cancelCurrent();
+    set({ aiGenerating: false, aiError: null });
+    const checked = validatePassageText(content);
+    if (!checked.valid) throw new Error(checked.reason);
+    const settings = useSettingsStore.getState();
+    const hash = computeContentHash(checked.normalizedText, settings.language);
+    const passage: PassageRecord = {
+      id: `custom_${hash}`,
+      contentHash: hash,
+      content: checked.normalizedText,
+      language: settings.language,
+      topic: settings.topic,
+      source: 'imported',
+      createdAt: Date.now(),
+      promptVersion: PROMPT_VERSION,
+    };
+    await savePassageRecord(passage);
+    const data = await loadAllHistoryData();
+    const selected = selectPbAndGhost(data.attempts, hash);
+    set({
+      ...data,
+      currentPassage: passage,
+      ...selected,
+      engine: initReadyState(passage.id, passage.content, hash),
+      storageFallback: getStorageStatus(),
+      saveStatus: 'idle',
+      unsavedAttempt: null,
+      saveErrorMessage: null,
       inputNotice: null,
       isRevealingText: false,
     });
@@ -383,9 +452,19 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
 
     // Trigger 1 sound per commit (even if multi-grapheme IME commit per Section 11)
     if (next.lastCommitOutcome === 'error') {
-      soundFX.playKeyCommit('error', settings.soundProfile, settings.soundVolume, settings.soundEnabled);
+      soundFX.playKeyCommit(
+        'error',
+        settings.soundProfile,
+        settings.soundVolume,
+        settings.soundEnabled
+      );
     } else if (next.lastCommitOutcome === 'correct') {
-      soundFX.playKeyCommit('correct', settings.soundProfile, settings.soundVolume, settings.soundEnabled);
+      soundFX.playKeyCommit(
+        'correct',
+        settings.soundProfile,
+        settings.soundVolume,
+        settings.soundEnabled
+      );
     }
 
     let nextParticleSignal = get().particleSignal;
@@ -436,11 +515,17 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
           set({
             passages,
             attempts,
-            pbAttempt: pbGhost.pbAttempt,
             storageFallback: getStorageStatus(),
-            saveStatus: res.saved ? 'saved' : 'error',
-            saveErrorMessage: res.error || null,
-            unsavedAttempt: res.saved ? null : record,
+            ...(get().engine.attemptId === record.id
+              ? {
+                  pbAttempt: pbGhost.pbAttempt,
+                  saveStatus: res.saved
+                    ? ('saved' as const)
+                    : ('error' as const),
+                  saveErrorMessage: res.error || null,
+                  unsavedAttempt: res.saved ? null : record,
+                }
+              : {}),
           });
         });
       }
@@ -460,7 +545,12 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
     if (next === prev) return;
 
     const settings = useSettingsStore.getState();
-    soundFX.playKeyCommit('delete', settings.soundProfile, settings.soundVolume, settings.soundEnabled);
+    soundFX.playKeyCommit(
+      'delete',
+      settings.soundProfile,
+      settings.soundVolume,
+      settings.soundEnabled
+    );
 
     set({ engine: next });
   },
@@ -474,7 +564,10 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
     }
   },
 
-  onInterruptAttempt: (reason, nowPerf = typeof performance !== 'undefined' ? performance.now() : 0) => {
+  onInterruptAttempt: (
+    reason,
+    nowPerf = typeof performance !== 'undefined' ? performance.now() : 0
+  ) => {
     const prev = get().engine;
     if (prev.status !== 'running') return;
     const next = interruptEngineAttempt(prev, reason, nowPerf);
@@ -529,21 +622,33 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
     // Section 14: "Xóa bài đang mở -> Chuyển sang bài mẫu sau khi xóa thành công"
     if (currentPassage && currentPassage.id === passageId) {
       const settings = useSettingsStore.getState();
-      await get().loadSampleForCriteria(settings.language, settings.topic, settings.length);
+      await get().loadSampleForCriteria(
+        settings.language,
+        settings.topic,
+        settings.length
+      );
     }
   },
 
   clearHistoryOnly: async () => {
     await clearAllHistory();
     const settings = useSettingsStore.getState();
-    await get().loadSampleForCriteria(settings.language, settings.topic, settings.length);
+    await get().loadSampleForCriteria(
+      settings.language,
+      settings.topic,
+      settings.length
+    );
   },
 
   fullFactoryReset: async () => {
     useSettingsStore.getState().resetSettingsToDefault();
     await clearAllHistory();
     const settings = useSettingsStore.getState();
-    await get().loadSampleForCriteria(settings.language, settings.topic, settings.length);
+    await get().loadSampleForCriteria(
+      settings.language,
+      settings.topic,
+      settings.length
+    );
   },
 
   commitImportPlan: async (plan) => {
@@ -598,6 +703,10 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
         topic: settings.topic,
         length: settings.length,
         personalCooldownSec: settings.personalCooldownSec,
+        seenHashes: get()
+          .passages.filter((p) => p.source === 'ai')
+          .slice(0, 100)
+          .map((p) => p.contentHash),
         signal,
       });
 
@@ -605,9 +714,10 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
       if (!aiSeqTracker.isCurrent(seq)) {
         return;
       }
-      aiSeqTracker.finish(seq);
-
-      const effectiveTotalMs = Math.max(30_000, settings.personalCooldownSec * 1000);
+      const effectiveTotalMs = Math.max(
+        30_000,
+        settings.personalCooldownSec * 1000
+      );
       if (result.retryAfterMs > 0) {
         set({
           cooldownRemainingMs: result.retryAfterMs,
@@ -616,11 +726,17 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
       }
 
       if (!result.ok || !result.text) {
+        aiSeqTracker.finish(seq);
         set({
           aiGenerating: false,
           aiReady: result.aiReady !== false,
-          aiNotReadyReason: result.aiReady === false ? result.error || null : get().aiNotReadyReason,
-          aiError: result.error || 'Không thể sinh bài AI lúc này. Đã giữ nguyên bài hiện tại.',
+          aiNotReadyReason:
+            result.aiReady === false
+              ? result.error || null
+              : get().aiNotReadyReason,
+          aiError:
+            result.error ||
+            'Không thể sinh bài AI lúc này. Đã giữ nguyên bài hiện tại.',
         });
         return;
       }
@@ -640,6 +756,8 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
 
       await savePassageRecord(newPassage);
       const { passages, attempts } = await loadAllHistoryData();
+      if (!aiSeqTracker.isCurrent(seq)) return;
+      aiSeqTracker.finish(seq);
       const pbGhost = selectPbAndGhost(attempts, contentHash);
 
       set({
@@ -653,7 +771,11 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
         pbAttempt: pbGhost.pbAttempt,
         ghostAttempt: pbGhost.ghostAttempt,
         isGhostFallbackFromPB: pbGhost.isGhostFallbackFromPB,
-        engine: initReadyState(newPassage.id, newPassage.content, newPassage.contentHash),
+        engine: initReadyState(
+          newPassage.id,
+          newPassage.content,
+          newPassage.contentHash
+        ),
         saveStatus: 'idle',
         saveErrorMessage: null,
         unsavedAttempt: null,
@@ -665,7 +787,8 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
       }
       aiSeqTracker.finish(seq);
       const isAbort =
-        err instanceof Error && (err.name === 'AbortError' || err.message.includes('aborted'));
+        err instanceof Error &&
+        (err.name === 'AbortError' || err.message.includes('aborted'));
       set({
         aiGenerating: false,
         aiError: isAbort
@@ -696,7 +819,9 @@ export const useTypingStore = create<TypingStoreState>((set, get) => ({
     const next = Math.max(0, current - deltaMs);
     set({
       cooldownRemainingMs: next,
-      ...(next === 0 && get().aiError?.includes('Overheated') ? { aiError: null } : {}),
+      ...(next === 0 && get().aiError?.includes('Overheated')
+        ? { aiError: null }
+        : {}),
     });
   },
 }));

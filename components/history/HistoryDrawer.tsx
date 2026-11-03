@@ -1,16 +1,11 @@
 'use client';
+import { useDialog } from '@/hooks/useDialog';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Award,
-  Play,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-react';
-import { selectPbAndGhost, formatAccuracy } from '../../utils/calculations';
-import { countGraphemes } from '../../utils/text';
+import { Award, Play, Search, Trash2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTypingStore } from '../../store/useTypingStore';
+import { formatAccuracy, selectPbAndGhost } from '../../utils/calculations';
+import { countGraphemes } from '../../utils/text';
 
 interface HistoryDrawerProps {
   onClose: () => void;
@@ -25,20 +20,11 @@ export default function HistoryDrawer({
     useTypingStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'sample' | 'ai' | 'imported'>('all');
+  const [sourceFilter, setSourceFilter] = useState<
+    'all' | 'sample' | 'ai' | 'imported'
+  >('all');
   const [langFilter, setLangFilter] = useState<'all' | 'vi' | 'en'>('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
 
   const enrichedPassages = useMemo(() => {
     return passages
@@ -73,8 +59,10 @@ export default function HistoryDrawer({
       });
   }, [passages, attempts, sourceFilter, langFilter, searchQuery]);
 
+  const dialogRef = useDialog(onClose);
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="history-drawer-title"
@@ -91,7 +79,8 @@ export default function HistoryDrawer({
               Kho Lịch sử & Ghost Vault
             </h2>
             <p className="text-xs text-slate-400">
-              Chọn lại bất kỳ bài nào với 0 giây hồi chiêu để đua cùng Ghost Caret kỷ lục cũ.
+              Chọn lại bất kỳ bài nào với 0 giây hồi chiêu để đua cùng Ghost
+              Caret kỷ lục cũ.
             </p>
           </div>
           <button
@@ -216,13 +205,15 @@ export default function HistoryDrawer({
                           {passage.source === 'ai'
                             ? 'AI'
                             : passage.source === 'imported'
-                            ? 'Imported'
-                            : 'Bài mẫu'}
+                              ? 'Imported'
+                              : 'Bài mẫu'}
                         </span>
                         {isCurrent && (
                           <>
                             <span aria-hidden="true">·</span>
-                            <span className="text-sky-400 font-semibold">Đang mở</span>
+                            <span className="text-sky-400 font-semibold">
+                              Đang mở
+                            </span>
                           </>
                         )}
                       </div>
@@ -244,7 +235,8 @@ export default function HistoryDrawer({
                           <span className="flex items-center gap-1.5 text-amber-300">
                             <Award className="h-3.5 w-3.5" />
                             <span>
-                              PB: {Math.round(pbAttempt.wpm)} WPM ({formatAccuracy(pbAttempt.accuracy)})
+                              PB: {Math.round(pbAttempt.wpm)} WPM (
+                              {formatAccuracy(pbAttempt.accuracy)})
                             </span>
                             {hasGhost && (
                               <span className="text-teal-400">· Có Ghost</span>
@@ -306,6 +298,6 @@ export default function HistoryDrawer({
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -1,3 +1,4 @@
+import { MAX_REPLAY_EVENTS } from '../engine/replayEngine';
 import {
   AttemptRecord,
   calculateAccuracy,
@@ -18,7 +19,6 @@ import {
   Topic,
   validatePassageText,
 } from '../utils/text';
-import { MAX_REPLAY_EVENTS } from '../engine/replayEngine';
 
 export const EXPORT_SCHEMA_VERSION = 1;
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -122,16 +122,24 @@ export function createExportBundle(
     cometTrailEnabled: Boolean(settings.cometTrailEnabled),
     soundEnabled: Boolean(settings.soundEnabled),
     soundProfile:
-      settings.soundProfile === 'thock' || settings.soundProfile === 'typewriter'
+      settings.soundProfile === 'thock' ||
+      settings.soundProfile === 'typewriter'
         ? settings.soundProfile
         : 'creamy',
     soundVolume: Math.max(0, Math.min(100, Number(settings.soundVolume) || 0)),
     language: settings.language === 'en' ? 'en' : 'vi',
     topic:
-      settings.topic === 'code' || settings.topic === 'scifi' ? settings.topic : 'philosophy',
+      settings.topic === 'code' || settings.topic === 'scifi'
+        ? settings.topic
+        : 'philosophy',
     length:
-      settings.length === 'medium' || settings.length === 'long' ? settings.length : 'short',
-    personalCooldownSec: Math.max(30, Math.min(60, Number(settings.personalCooldownSec) || 30)),
+      settings.length === 'medium' || settings.length === 'long'
+        ? settings.length
+        : 'short',
+    personalCooldownSec: Math.max(
+      30,
+      Math.min(60, Number(settings.personalCooldownSec) || 30)
+    ),
   };
 
   return {
@@ -292,9 +300,12 @@ export function validateAndPrepareImport(
     }
 
     const id = typeof rawP.id === 'string' ? rawP.id.trim() : '';
-    const language = rawP.language === 'en' || rawP.language === 'vi' ? rawP.language : null;
+    const language =
+      rawP.language === 'en' || rawP.language === 'vi' ? rawP.language : null;
     const topic =
-      rawP.topic === 'code' || rawP.topic === 'philosophy' || rawP.topic === 'scifi'
+      rawP.topic === 'code' ||
+      rawP.topic === 'philosophy' ||
+      rawP.topic === 'scifi'
         ? rawP.topic
         : null;
     const createdAt = rawP.createdAt;
@@ -430,9 +441,12 @@ export function validateAndPrepareImport(
     }
 
     const id = typeof rawA.id === 'string' ? rawA.id.trim() : '';
-    const origPassageId = typeof rawA.passageId === 'string' ? rawA.passageId.trim() : '';
+    const origPassageId =
+      typeof rawA.passageId === 'string' ? rawA.passageId.trim() : '';
     const status =
-      rawA.status === 'completed' || rawA.status === 'abandoned' ? rawA.status : null;
+      rawA.status === 'completed' || rawA.status === 'abandoned'
+        ? rawA.status
+        : null;
 
     if (!id || !origPassageId || !status) {
       return {
@@ -640,7 +654,8 @@ export function validateAndPrepareImport(
     // Recalculate metrics from raw counters (never trust imported wpm/rank!)
     const recalculatedWpm = calculateNetWpm(correctFinal, elapsedMs);
     const recalculatedGrossWpm = calculateGrossWpm(insertedTotal, elapsedMs);
-    const recalculatedAcc = calculateAccuracy(correctInsertions, insertedTotal) ?? 0;
+    const recalculatedAcc =
+      calculateAccuracy(correctInsertions, insertedTotal) ?? 0;
     const recalculatedRank = calculateRank(
       recalculatedWpm,
       recalculatedAcc,

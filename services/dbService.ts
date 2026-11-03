@@ -22,7 +22,8 @@ class AuraTypeDatabase extends Dexie {
     super('AuraTypeAIDatabase');
     this.version(1).stores({
       passages: 'id, contentHash, language, topic, source, createdAt',
-      attempts: 'id, passageId, contentHash, status, startedAt, [contentHash+rulesVersion]',
+      attempts:
+        'id, passageId, contentHash, status, startedAt, [contentHash+rulesVersion]',
       meta: 'key',
     });
   }
@@ -40,7 +41,8 @@ function getDb(): AuraTypeDatabase | null {
   if (memoryFallbackActive) return null;
   if (!('indexedDB' in window) || !window.indexedDB) {
     memoryFallbackActive = true;
-    memoryFallbackReason = 'Trình duyệt hiện tại không hỗ trợ hoặc đã chặn IndexedDB.';
+    memoryFallbackReason =
+      'Trình duyệt hiện tại không hỗ trợ hoặc đã chặn IndexedDB.';
     return null;
   }
   if (!dbInstance) {
@@ -49,7 +51,9 @@ function getDb(): AuraTypeDatabase | null {
     } catch (err) {
       memoryFallbackActive = true;
       memoryFallbackReason =
-        err instanceof Error ? err.message : 'Không thể khởi tạo cơ sở dữ liệu IndexedDB.';
+        err instanceof Error
+          ? err.message
+          : 'Không thể khởi tạo cơ sở dữ liệu IndexedDB.';
       return null;
     }
   }
@@ -149,7 +153,8 @@ export async function savePassageRecord(passage: PassageRecord): Promise<{
     activateFallbackOnQuotaOrOpenError(err);
     return {
       saved: false,
-      error: err instanceof Error ? err.message : 'Không thể lưu bài vào IndexedDB.',
+      error:
+        err instanceof Error ? err.message : 'Không thể lưu bài vào IndexedDB.',
     };
   }
 }
@@ -205,8 +210,12 @@ export async function loadAllHistoryData(): Promise<{
 }> {
   const db = getDb();
   if (!db) {
-    const passages = Array.from(memoryPassages.values()).sort((a, b) => b.createdAt - a.createdAt);
-    const attempts = Array.from(memoryAttempts.values()).sort((a, b) => b.startedAt - a.startedAt);
+    const passages = Array.from(memoryPassages.values()).sort(
+      (a, b) => b.createdAt - a.createdAt
+    );
+    const attempts = Array.from(memoryAttempts.values()).sort(
+      (a, b) => b.startedAt - a.startedAt
+    );
     return { passages, attempts };
   }
 
@@ -220,8 +229,12 @@ export async function loadAllHistoryData(): Promise<{
     return { passages, attempts };
   } catch (err) {
     activateFallbackOnQuotaOrOpenError(err);
-    const passages = Array.from(memoryPassages.values()).sort((a, b) => b.createdAt - a.createdAt);
-    const attempts = Array.from(memoryAttempts.values()).sort((a, b) => b.startedAt - a.startedAt);
+    const passages = Array.from(memoryPassages.values()).sort(
+      (a, b) => b.createdAt - a.createdAt
+    );
+    const attempts = Array.from(memoryAttempts.values()).sort(
+      (a, b) => b.startedAt - a.startedAt
+    );
     return { passages, attempts };
   }
 }
@@ -268,7 +281,10 @@ export async function deletePassageAndAttempts(passageId: string): Promise<{
 /**
  * Clears all history (passages + attempts), then re-seeds sample passages. Does NOT clear settings.
  */
-export async function clearAllHistory(): Promise<{ ok: boolean; error?: string }> {
+export async function clearAllHistory(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
   memoryPassages.clear();
   memoryAttempts.clear();
 

@@ -1,284 +1,178 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI, Type } from '@google/genai';
 import {
+  configuredKeys,
+  generateGeminiPassage,
+  ProviderError,
+} from '@/services/geminiProvider';
+import {
+  addCachedPassage,
+  cachedPassages,
+  generationStorageReady,
+  nextAllowed,
+  releaseGeneration,
+  reserveGeneration,
+} from '@/services/generationStorage';
+import { resolveEffectiveCooldownMs } from '@/utils/rateLimit';
+import {
+  computeContentHash,
   Language,
-  LENGTH_BOUNDS,
   PassageLength,
   Topic,
   validatePassageText,
-} from '../../../utils/text';
-import {
-  acquireGenerationSlot,
-  createRateLimitStore,
-  getClientCooldownStatus,
-  releaseGenerationSlot,
-} from '../../../utils/rateLimit';
+} from '@/utils/text';
+import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 
-const globalRateStore = createRateLimitStore();
-
-function isAiProviderConfigured(): boolean {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  return Boolean(key && key !== 'MY_GEMINI_API_KEY' && key.length >= 10);
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+const clientId = (req: NextRequest) =>
+  createHash('sha256')
+    .update(
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        'local-development'
+    )
+    .digest('hex');
+function json(data: Record<string, unknown>, status = 200) {
+  const now = Date.now();
+  const next = Number(data.nextAllowedAt) || 0;
+  return NextResponse.json(
+    { ...data, serverNow: now, retryAfterMs: Math.max(0, next - now) },
+    {
+      status,
+      headers: {
+        'Cache-Control': 'no-store',
+        ...(status === 429
+          ? {
+              'Retry-After': String(
+                Math.max(1, Math.ceil((next - now) / 1000))
+              ),
+            }
+          : {}),
+      },
+    }
+  );
 }
-
-function getClientIdentifier(req: NextRequest, bodySessionId?: string): string {
-  const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
-  const sessionPart =
-    typeof bodySessionId === 'string' && bodySessionId.length <= 64
-      ? bodySessionId.replace(/[^a-zA-Z0-9_-]/g, '')
-      : 'anon';
-  return `${forwarded}:${sessionPart}`;
-}
-
 export async function GET(req: NextRequest) {
-  const sessionId = req.nextUrl.searchParams.get('sessionId') || 'anon';
-  const clientKey = getClientIdentifier(req, sessionId);
-  const serverNow = Date.now();
-  const status = getClientCooldownStatus(globalRateStore, clientKey, serverNow);
-  const aiReady = isAiProviderConfigured();
-
-  return NextResponse.json({
-    aiReady,
-    reason: aiReady
-      ? null
-      : 'Nhà cung cấp AI chưa được cấu hình trên máy chủ (GEMINI_API_KEY chưa sẵn sàng). Chế độ bài mẫu và Ghost Replay vẫn hoạt động đầy đủ.',
-    serverNow: status.serverNow,
-    nextAllowedAt: status.nextAllowedAt,
-    retryAfterMs: status.retryAfterMs,
-  });
+  const aiReady = configuredKeys().length > 0 && generationStorageReady();
+  try {
+    return json({
+      aiReady,
+      reason: aiReady
+        ? null
+        : 'AI chưa sẵn sàng. Bạn vẫn có thể luyện bài mẫu.',
+      nextAllowedAt: aiReady ? await nextAllowed(clientId(req)) : 0,
+    });
+  } catch {
+    return json({
+      aiReady: false,
+      reason: 'AI đang tạm ngưng. Bài mẫu vẫn hoạt động.',
+    });
+  }
 }
-
-function buildSystemInstruction(language: Language, topic: Topic, length: PassageLength): string {
-  const bounds = LENGTH_BOUNDS[length];
-  const targetMid = Math.round((bounds.min + bounds.max) / 2);
-
-  const langDesc =
-    language === 'vi'
-      ? 'Tiếng Việt chuẩn có đầy đủ dấu thanh và dấu phụ (Unicode NFC), văn phong tự nhiên, mạch lạc.'
-      : 'Natural, articulate English prose.';
-
-  const topicDesc =
-    topic === 'code'
-      ? 'A clean single-line TypeScript or JavaScript code snippet with a short inline comment explaining a pure functional concept. Must NOT contain any line breaks or tabs—use spaces only.'
-      : topic === 'philosophy'
-      ? 'A contemplative, inspiring reflection on focus, craftsmanship, mindfulness, or human thought.'
-      : 'An atmospheric science-fiction log about deep-space exploration, orbital archives, or quantum navigation.';
-
-  return [
-    'You are the passage generator for AuraType AI, a precision typing studio.',
-    `Language requirement: ${langDesc}`,
-    `Topic requirement: ${topicDesc}`,
-    `STRICT LENGTH REQUIREMENT: The generated "text" value MUST be between ${bounds.min} and ${bounds.max} visible characters (graphemes) including spaces. Aim closely for ${targetMid} characters.`,
-    'STRICT FORMATTING RULES:',
-    '1. Return ONLY a JSON object with a single property: { "text": "..." }.',
-    '2. Do NOT include any newline (\\n), carriage return (\\r), or tab (\\t) characters inside "text". Use single standard spaces (U+0020) only.',
-    '3. Do NOT include emojis, zero-width characters, or markdown code fences.',
-    '4. Complete all sentences cleanly within the character budget.',
-  ].join('\n');
-}
-
 export async function POST(req: NextRequest) {
-  const serverNow = Date.now();
-
+  // Browser-origin requests must come from this application; no wildcard CORS.
+  const origin = req.headers.get('origin');
+  if (origin && origin !== req.nextUrl.origin)
+    return json({ error: 'Nguồn yêu cầu không hợp lệ.' }, 403);
+  if (Number(req.headers.get('content-length')) > 16_384)
+    return json({ error: 'Yêu cầu quá lớn.' }, 413);
   let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
+    const raw = await req.text();
+    if (Buffer.byteLength(raw) > 16_384)
+      return json({ error: 'Yêu cầu quá lớn.' }, 413);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error();
+    body = parsed;
   } catch {
-    return NextResponse.json(
-      { error: 'Payload yêu cầu không phải JSON hợp lệ.', serverNow },
-      { status: 400 }
-    );
+    return json({ error: 'Nội dung yêu cầu không hợp lệ.' }, 400);
   }
-
-  const language: Language | null =
-    body.language === 'en' || body.language === 'vi' ? body.language : null;
-  const topic: Topic | null =
-    body.topic === 'code' || body.topic === 'philosophy' || body.topic === 'scifi'
-      ? body.topic
-      : null;
-  const length: PassageLength | null =
-    body.length === 'short' || body.length === 'medium' || body.length === 'long'
-      ? body.length
-      : null;
-  const requestId = typeof body.requestId === 'string' ? body.requestId.slice(0, 64) : '';
-  const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 64) : 'anon';
-  const personalCooldownSec =
-    typeof body.personalCooldownSec === 'number' ? body.personalCooldownSec : 30;
-
-  if (!language || !topic || !length || !requestId) {
-    return NextResponse.json(
-      {
-        error: 'Tham số ngôn ngữ, chủ đề, độ dài hoặc requestId không hợp lệ.',
-        serverNow,
-      },
-      { status: 400 }
-    );
-  }
-
-  // Check if AI provider is configured BEFORE acquiring cooldown slot (Section 10.3)
-  if (!isAiProviderConfigured()) {
-    return NextResponse.json(
+  const { language, topic, length, requestId } = body;
+  if (
+    typeof language !== 'string' ||
+    typeof topic !== 'string' ||
+    typeof length !== 'string' ||
+    !['vi', 'en'].includes(String(language)) ||
+    !['code', 'philosophy', 'scifi'].includes(String(topic)) ||
+    !['short', 'medium', 'long'].includes(String(length)) ||
+    typeof requestId !== 'string' ||
+    !requestId ||
+    requestId.length > 64
+  )
+    return json({ error: 'Cấu hình bài chưa hợp lệ.' }, 400);
+  if (!configuredKeys().length || !generationStorageReady())
+    return json(
       {
         error:
-          'Nhà cung cấp AI chưa sẵn sàng (chưa cấu hình GEMINI_API_KEY trên server). Vui lòng sử dụng chế độ bài mẫu.',
+          'Gemini chưa được cấu hình. Hãy luyện bài mẫu hoặc nhập bài của bạn.',
         aiReady: false,
-        serverNow,
       },
-      { status: 503 }
+      503
     );
-  }
-
-  const clientKey = getClientIdentifier(req, sessionId);
-  const slot = acquireGenerationSlot(globalRateStore, clientKey, serverNow, personalCooldownSec);
-
-  if (!slot.allowed) {
-    return NextResponse.json(
-      {
-        error: slot.reason,
-        serverNow: slot.serverNow,
-        nextAllowedAt: slot.nextAllowedAt,
-        retryAfterMs: slot.retryAfterMs,
-        requestId,
-      },
-      { status: 429 }
-    );
-  }
-
+  const seen = new Set(
+    Array.isArray(body.seenHashes)
+      ? body.seenHashes
+          .filter((v): v is string => typeof v === 'string' && v.length <= 80)
+          .slice(0, 100)
+      : []
+  );
+  const bucket = `${process.env.GEMINI_MODEL || 'gemini-3.5-flash'}:2:${language}:${topic}:${length}`;
+  let lease: string | null = null;
+  let next = 0;
   try {
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-
-    const bounds = LENGTH_BOUNDS[length];
-    const targetMid = Math.round((bounds.min + bounds.max) / 2);
-    const userPrompt =
-      language === 'vi'
-        ? `Hãy viết một đoạn văn bản chủ đề "${topic}" bằng tiếng Việt có dấu với độ dài chính xác trong khoảng ${bounds.min} đến ${bounds.max} ký tự (mục tiêu khoảng ${targetMid} ký tự, chỉ dùng dấu cách đơn, tuyệt đối không xuống dòng, không emoji).`
-        : `Write a single-paragraph "${topic}" passage in English whose length is strictly between ${bounds.min} and ${bounds.max} characters (aim for ~${targetMid} characters, single spaces only, no newlines, no emojis).`;
-
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 20_000);
-
-    let responseText: string | undefined;
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction: buildSystemInstruction(language, topic, length),
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              text: {
-                type: Type.STRING,
-                description: `Single-line typing passage between ${bounds.min} and ${bounds.max} characters.`,
-              },
-            },
-            required: ['text'],
-          },
-          abortSignal: abortController.signal,
-        },
-      });
-      responseText = response.text;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (!responseText) {
-      return NextResponse.json(
+    const pool = await cachedPassages(bucket);
+    const cached = pool.find(
+      (text) =>
+        validatePassageText(text, length as PassageLength).valid &&
+        !seen.has(computeContentHash(text, language as Language))
+    );
+    const slot = await reserveGeneration(
+      clientId(req),
+      resolveEffectiveCooldownMs(Number(body.personalCooldownSec)),
+      !cached
+    );
+    next = slot.nextAllowedAt;
+    if (!slot.allowed)
+      return json(
         {
-          error: 'Mô hình AI trả về phản hồi rỗng. Bài hiện tại vẫn được giữ nguyên.',
-          serverNow: Date.now(),
-          nextAllowedAt: slot.nextAllowedAt,
-          retryAfterMs: Math.max(0, slot.nextAllowedAt - Date.now()),
+          error:
+            'Đã đến giới hạn tạo bài. Bạn có thể tiếp tục với bài mẫu hoặc lịch sử.',
+          nextAllowedAt: next,
           requestId,
         },
-        { status: 502 }
+        429
       );
-    }
-
-    let parsedJson: { text?: unknown };
-    try {
-      parsedJson = JSON.parse(responseText.trim()) as { text?: unknown };
-    } catch {
-      return NextResponse.json(
-        {
-          error: 'Định dạng JSON từ AI không hợp lệ. Bài hiện tại vẫn được giữ nguyên.',
-          serverNow: Date.now(),
-          nextAllowedAt: slot.nextAllowedAt,
-          retryAfterMs: Math.max(0, slot.nextAllowedAt - Date.now()),
-          requestId,
-        },
-        { status: 502 }
-      );
-    }
-
-    if (typeof parsedJson.text !== 'string') {
-      return NextResponse.json(
-        {
-          error: 'Dữ liệu AI thiếu trường "text". Bài hiện tại vẫn được giữ nguyên.',
-          serverNow: Date.now(),
-          nextAllowedAt: slot.nextAllowedAt,
-          retryAfterMs: Math.max(0, slot.nextAllowedAt - Date.now()),
-          requestId,
-        },
-        { status: 502 }
-      );
-    }
-
-    // Sanitize single spaces only if there are no forbidden characters, then validate strictly
-    const cleanedCandidate = parsedJson.text.replace(/\r?\n/g, ' ').replace(/\t/g, ' ');
-    const validation = validatePassageText(cleanedCandidate, length);
-
-    if (!validation.valid) {
-      return NextResponse.json(
-        {
-          error: `Nội dung AI sinh ra không đạt chuẩn kiểm tra: ${validation.reason}`,
-          serverNow: Date.now(),
-          nextAllowedAt: slot.nextAllowedAt,
-          retryAfterMs: Math.max(0, slot.nextAllowedAt - Date.now()),
-          requestId,
-        },
-        { status: 422 }
-      );
-    }
-
-    const doneNow = Date.now();
-    return NextResponse.json({
-      text: validation.normalizedText,
-      graphemeCount: validation.graphemeCount,
+    lease = slot.lease;
+    const text =
+      cached ||
+      (await generateGeminiPassage(
+        language as Language,
+        topic as Topic,
+        length as PassageLength,
+        AbortSignal.any([req.signal, AbortSignal.timeout(20_000)])
+      ));
+    if (!cached) await addCachedPassage(bucket, text);
+    return json({
+      text,
       requestId,
-      serverNow: doneNow,
-      nextAllowedAt: slot.nextAllowedAt,
-      retryAfterMs: Math.max(0, slot.nextAllowedAt - doneNow),
+      nextAllowedAt: next,
+      fromCache: Boolean(cached),
     });
-  } catch (err) {
-    const doneNow = Date.now();
-    const isAbort =
-      err instanceof Error && (err.name === 'AbortError' || err.message.includes('aborted'));
-    const message = isAbort
-      ? 'Yêu cầu tạo bài AI quá thời gian chờ (timeout 20s). Đã giữ nguyên bài hiện tại.'
-      : err instanceof Error
-      ? `Không thể tạo bài AI: ${err.message}`
-      : 'Lỗi không xác định khi gọi nhà cung cấp AI.';
-
-    return NextResponse.json(
+  } catch (error) {
+    const status = error instanceof ProviderError ? error.status : 503;
+    if (status === 429) next = Math.max(next, Date.now() + 60_000);
+    return json(
       {
-        error: message,
-        serverNow: doneNow,
-        nextAllowedAt: slot.nextAllowedAt,
-        retryAfterMs: Math.max(0, slot.nextAllowedAt - doneNow),
+        error:
+          error instanceof ProviderError
+            ? error.message
+            : 'Kết nối AI tạm thời không khả dụng. Bài hiện tại được giữ nguyên.',
+        nextAllowedAt: next,
         requestId,
       },
-      { status: isAbort ? 504 : 502 }
+      status
     );
   } finally {
-    releaseGenerationSlot(globalRateStore, clientKey);
+    if (lease) await releaseGeneration(lease).catch(() => {});
   }
 }

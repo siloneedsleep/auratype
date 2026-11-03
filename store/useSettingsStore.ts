@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { Language, PassageLength, Topic } from '../utils/text';
-import { SoundProfile } from '../utils/soundFX';
 import { ExportableSettings } from '../services/dataTransfer';
+import { SoundProfile } from '../utils/soundFX';
+import { Language, PassageLength, Topic } from '../utils/text';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 const SETTINGS_STORAGE_KEY = 'auratype_settings_v1';
@@ -11,6 +11,9 @@ export interface SettingsState extends ExportableSettings {
   virtualKeyboardEnabled: boolean;
   reducedMotionSystem: boolean;
   hydrated: boolean;
+  targetWpm: number;
+  setTargetWpm: (value: number) => void;
+  setReducedMotion: (value: boolean) => void;
 
   hydrateSettings: () => void;
   setFxMode: (mode: 'lite' | 'ultra') => void;
@@ -29,12 +32,14 @@ export interface SettingsState extends ExportableSettings {
   resetSettingsToDefault: () => void;
 }
 
-export const DEFAULT_SETTINGS: ExportableSettings & { virtualKeyboardEnabled: boolean } = {
+export const DEFAULT_SETTINGS: ExportableSettings & {
+  virtualKeyboardEnabled: boolean;
+} = {
   fxMode: 'lite', // Per Section 6: Mặc định FX nhẹ, âm thanh tắt. Ultra Juice là tùy chọn.
   ghostEnabled: true,
-  screenShakeEnabled: true,
+  screenShakeEnabled: false,
   cometTrailEnabled: true,
-  virtualKeyboardEnabled: true,
+  virtualKeyboardEnabled: false,
   soundEnabled: false,
   soundProfile: 'creamy',
   soundVolume: 70,
@@ -65,8 +70,10 @@ function validateAndSanitizeSettings(
     };
   }
 
-  const fxMode = obj.fxMode === 'ultra' && !prefersReducedMotion ? 'ultra' : 'lite';
-  const ghostEnabled = typeof obj.ghostEnabled === 'boolean' ? obj.ghostEnabled : true;
+  const fxMode =
+    obj.fxMode === 'ultra' && !prefersReducedMotion ? 'ultra' : 'lite';
+  const ghostEnabled =
+    typeof obj.ghostEnabled === 'boolean' ? obj.ghostEnabled : true;
   const screenShakeEnabled =
     typeof obj.screenShakeEnabled === 'boolean'
       ? obj.screenShakeEnabled
@@ -74,8 +81,11 @@ function validateAndSanitizeSettings(
   const cometTrailEnabled =
     typeof obj.cometTrailEnabled === 'boolean' ? obj.cometTrailEnabled : true;
   const virtualKeyboardEnabled =
-    typeof obj.virtualKeyboardEnabled === 'boolean' ? obj.virtualKeyboardEnabled : true;
-  const soundEnabled = typeof obj.soundEnabled === 'boolean' ? obj.soundEnabled : false;
+    typeof obj.virtualKeyboardEnabled === 'boolean'
+      ? obj.virtualKeyboardEnabled
+      : false;
+  const soundEnabled =
+    typeof obj.soundEnabled === 'boolean' ? obj.soundEnabled : false;
   const soundProfile: SoundProfile =
     obj.soundProfile === 'thock' || obj.soundProfile === 'typewriter'
       ? obj.soundProfile
@@ -90,7 +100,8 @@ function validateAndSanitizeSettings(
   const length: PassageLength =
     obj.length === 'medium' || obj.length === 'long' ? obj.length : 'short';
   const personalCooldownSec =
-    typeof obj.personalCooldownSec === 'number' && Number.isFinite(obj.personalCooldownSec)
+    typeof obj.personalCooldownSec === 'number' &&
+    Number.isFinite(obj.personalCooldownSec)
       ? Math.max(30, Math.min(60, Math.round(obj.personalCooldownSec)))
       : 30;
 
@@ -116,6 +127,7 @@ function persistSettings(state: SettingsState): void {
     const payload = {
       schemaVersion: SETTINGS_SCHEMA_VERSION,
       fxMode: state.fxMode,
+      targetWpm: state.targetWpm,
       ghostEnabled: state.ghostEnabled,
       screenShakeEnabled: state.screenShakeEnabled,
       cometTrailEnabled: state.cometTrailEnabled,
@@ -139,6 +151,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...DEFAULT_SETTINGS,
   reducedMotionSystem: false,
   hydrated: false,
+  targetWpm: 0,
+  setTargetWpm: (value) => {
+    set({
+      targetWpm: Number.isFinite(value)
+        ? Math.max(0, Math.min(150, Math.round(value)))
+        : 0,
+    });
+    persistSettings(get());
+  },
+  setReducedMotion: (reducedMotionSystem) => set({ reducedMotionSystem }),
 
   hydrateSettings: () => {
     if (typeof window === 'undefined') return;
@@ -160,6 +182,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       ...sanitized,
       reducedMotionSystem: prefersReduced,
       hydrated: true,
+      targetWpm:
+        parsed &&
+        typeof parsed === 'object' &&
+        'targetWpm' in parsed &&
+        typeof parsed.targetWpm === 'number' &&
+        Number.isFinite(parsed.targetWpm)
+          ? Math.max(0, Math.min(150, Math.round(parsed.targetWpm)))
+          : 0,
     });
     persistSettings(get());
   },

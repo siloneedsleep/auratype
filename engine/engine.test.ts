@@ -1,5 +1,16 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
+import { validateAndPrepareImport } from '../services/dataTransfer';
+import {
+  AttemptRecord,
+  calculateAccuracy,
+  calculateGrossWpm,
+  calculateNetWpm,
+  formatAccuracy,
+  formatLiveWpm,
+  RULES_VERSION,
+  selectPbAndGhost,
+} from '../utils/calculations';
 import {
   computeContentHash,
   normalizeNFC,
@@ -7,36 +18,16 @@ import {
   splitGraphemes,
   validatePassageText,
 } from '../utils/text';
-import {
-  AttemptRecord,
-  calculateAccuracy,
-  calculateGrossWpm,
-  calculateNetWpm,
-  calculateRank,
-  formatAccuracy,
-  formatLiveWpm,
-  RULES_VERSION,
-  selectPbAndGhost,
-} from '../utils/calculations';
+import { reconcileInputDiff, resolveCompositionEnd } from './inputAdapter';
+import { calculateGhostDiff, getGhostPositionAtTime } from './replayEngine';
 import {
   cancelCompositionEngine,
   commitGraphemesEngine,
   deleteGraphemesEngine,
   initReadyState,
-  interruptEngineAttempt,
   startCompositionEngine,
   updateCompositionEngine,
 } from './typingEngine';
-import { calculateGhostDiff, getGhostPositionAtTime } from './replayEngine';
-import { evaluateBeforeInput, reconcileInputDiff, resolveCompositionEnd } from './inputAdapter';
-import { createExportBundle, validateAndPrepareImport } from '../services/dataTransfer';
-import {
-  acquireGenerationSlot,
-  createRateLimitStore,
-  releaseGenerationSlot,
-  resolveEffectiveCooldownMs,
-} from '../utils/rateLimit';
-import { RequestSequenceTracker } from '../services/llmService';
 
 test('Section 15.1 - Standard 250 grapheme benchmark: 60s, 250 correct -> 50 WPM, 100% accuracy', () => {
   const passage = 'a'.repeat(250);
@@ -132,9 +123,17 @@ test('Section 15.1 - Edge cases: uncorrected error, backspace at start, wrong la
   assert.equal(state.remainingErrors, 0);
 
   // 3. Uncorrected error in the middle still allows completion if last char is right
-  let stateWithMidError = initReadyState('p_vi', text, computeContentHash(text, 'vi'));
+  let stateWithMidError = initReadyState(
+    'p_vi',
+    text,
+    computeContentHash(text, 'vi')
+  );
   const withMidMistake = ['V', 'x', 'ệ', 't', ' ', 'N', 'a', 'm'];
-  stateWithMidError = commitGraphemesEngine(stateWithMidError, withMidMistake, 0);
+  stateWithMidError = commitGraphemesEngine(
+    stateWithMidError,
+    withMidMistake,
+    0
+  );
   stateWithMidError = commitGraphemesEngine(stateWithMidError, [], 2000); // no-op
   // Wait: committed at t=0 means elapsedMs=0, check no NaN/Infinity!
   assert.equal(Number.isFinite(stateWithMidError.wpm), true);
@@ -179,7 +178,11 @@ test('Section 7.3 - Vietnamese IME composition lifecycle and cancellation', () =
 
   // Start again and commit full multi-grapheme word from IME
   state = startCompositionEngine(state, 2000, 6000);
-  const { action, committedSuffix } = resolveCompositionEnd([], 'Tiếng', 'Tiếng');
+  const { action, committedSuffix } = resolveCompositionEnd(
+    [],
+    'Tiếng',
+    'Tiếng'
+  );
   assert.equal(action.type, 'commit');
   if (action.type === 'commit') {
     state = commitGraphemesEngine(state, action.graphemes, 2500, 6500);
@@ -228,9 +231,18 @@ test('Section 9.2 - PB and Ghost selection rules, tie-breaking, and Ghost timeli
     ...overrides,
   });
 
-  const abandoned = baseAttempt({ id: 'abandoned', status: 'abandoned', wpm: 150, accuracy: 100 });
+  const abandoned = baseAttempt({
+    id: 'abandoned',
+    status: 'abandoned',
+    wpm: 150,
+    accuracy: 100,
+  });
   const lowAcc = baseAttempt({ id: 'lowAcc', wpm: 120, accuracy: 94.9 });
-  const hasErrors = baseAttempt({ id: 'hasErrors', wpm: 110, remainingErrors: 1 });
+  const hasErrors = baseAttempt({
+    id: 'hasErrors',
+    wpm: 110,
+    remainingErrors: 1,
+  });
   const pbNoReplay = baseAttempt({
     id: 'pbNoReplay',
     wpm: 95,
@@ -253,7 +265,14 @@ test('Section 9.2 - PB and Ghost selection rules, tie-breaking, and Ghost timeli
   });
 
   const selection = selectPbAndGhost(
-    [abandoned, lowAcc, hasErrors, pbNoReplay, ghostEligible1, ghostEligibleTieEarlier],
+    [
+      abandoned,
+      lowAcc,
+      hasErrors,
+      pbNoReplay,
+      ghostEligible1,
+      ghostEligibleTieEarlier,
+    ],
     hash
   );
 
@@ -378,7 +397,11 @@ test('Section 12 & 15.1 - Import validation, metric recalculation, ID conflict r
       },
     ],
   };
-  const badPlan = validateAndPrepareImport(JSON.stringify(badReplayBundle), [], []);
+  const badPlan = validateAndPrepareImport(
+    JSON.stringify(badReplayBundle),
+    [],
+    []
+  );
   assert.equal(badPlan.valid, false);
   assert.ok(badPlan.error?.includes('giảm dần'));
 });

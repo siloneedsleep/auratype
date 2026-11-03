@@ -66,8 +66,24 @@ export default function TypingCanvas({
     }
     poolRef.current = pool;
     ringsRef.current = [
-      { active: false, x: 0, y: 0, radius: 0, maxRadius: 280, alpha: 0, color: '#38BDF8' },
-      { active: false, x: 0, y: 0, radius: 0, maxRadius: 420, alpha: 0, color: '#FBBF24' },
+      {
+        active: false,
+        x: 0,
+        y: 0,
+        radius: 0,
+        maxRadius: 280,
+        alpha: 0,
+        color: '#38BDF8',
+      },
+      {
+        active: false,
+        x: 0,
+        y: 0,
+        radius: 0,
+        maxRadius: 420,
+        alpha: 0,
+        color: '#FBBF24',
+      },
     ];
   }, []);
 
@@ -195,6 +211,20 @@ export default function TypingCanvas({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (enabled) return;
+    if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = null;
+    poolRef.current.forEach((p) => {
+      p.active = false;
+    });
+    ringsRef.current.forEach((r) => {
+      r.active = false;
+    });
+    const canvas = canvasRef.current;
+    canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+  }, [enabled]);
 
   // Spawn particles when signal updates
   useEffect(() => {

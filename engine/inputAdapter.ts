@@ -38,7 +38,8 @@ export function evaluateBeforeInput(
       shouldPreventDefault: true,
       action: {
         type: 'blocked',
-        reason: 'Không hỗ trợ dán (paste), kéo thả hoặc tự động điền khi đang luyện gõ.',
+        reason:
+          'Không hỗ trợ dán (paste), kéo thả hoặc tự động điền khi đang luyện gõ.',
       },
     };
   }
@@ -57,7 +58,10 @@ export function evaluateBeforeInput(
     }
   }
 
-  if (!isComposing && (inputType === 'insertLineBreak' || inputType === 'insertParagraph')) {
+  if (
+    !isComposing &&
+    (inputType === 'insertLineBreak' || inputType === 'insertParagraph')
+  ) {
     return {
       shouldPreventDefault: true,
       action: { type: 'noop' },
@@ -90,7 +94,9 @@ export function reconcileInputDiff(params: {
   } = params;
 
   const committedString = normalizeNFC(committedGraphemes.join(''));
-  const currentNormalized = normalizeNFC(rawTextareaValue.replace(/[\r\n\t]/g, ''));
+  const currentNormalized = normalizeNFC(
+    rawTextareaValue.replace(/[\r\n\t]/g, '')
+  );
 
   // Handle explicit word deletion
   if (!isComposing && inputType === 'deleteWordBackward') {
@@ -116,7 +122,8 @@ export function reconcileInputDiff(params: {
 
   if (
     justEndedCompositionText &&
-    currentNormalized === normalizeNFC(committedString + justEndedCompositionText)
+    currentNormalized ===
+      normalizeNFC(committedString + justEndedCompositionText)
   ) {
     // Already handled by compositionend
     return { type: 'noop' };
@@ -179,7 +186,9 @@ export function resolveCompositionEnd(
   rawTextareaValue: string
 ): { action: AdapterAction; committedSuffix: string } {
   const committedString = normalizeNFC(committedGraphemes.join(''));
-  const normalizedValue = normalizeNFC(rawTextareaValue.replace(/[\r\n\t]/g, ''));
+  const normalizedValue = normalizeNFC(
+    rawTextareaValue.replace(/[\r\n\t]/g, '')
+  );
 
   let suffix = '';
   if (typeof compositionData === 'string' && compositionData.length > 0) {

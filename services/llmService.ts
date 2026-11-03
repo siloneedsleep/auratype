@@ -66,7 +66,10 @@ export function getOrCreateAnonSessionId(): string {
   }
 }
 
-export function saveCooldownToStorage(nextAllowedAt: number, serverNow: number): void {
+export function saveCooldownToStorage(
+  nextAllowedAt: number,
+  serverNow: number
+): void {
   if (typeof window === 'undefined') return;
   const payload: CooldownSyncPayload = {
     nextAllowedAtEpoch: nextAllowedAt,
@@ -93,8 +96,12 @@ export function saveCooldownToStorage(nextAllowedAt: number, serverNow: number):
  * Restores remaining cooldown milliseconds from localStorage across page reloads,
  * compensating for local clock skew using serverNowEpoch & savedAtEpoch.
  */
-export function loadRemainingCooldownMs(): { remainingMs: number; nextAllowedAtEpoch: number } {
-  if (typeof window === 'undefined') return { remainingMs: 0, nextAllowedAtEpoch: 0 };
+export function loadRemainingCooldownMs(): {
+  remainingMs: number;
+  nextAllowedAtEpoch: number;
+} {
+  if (typeof window === 'undefined')
+    return { remainingMs: 0, nextAllowedAtEpoch: 0 };
   try {
     const raw = window.localStorage.getItem(COOLDOWN_STORAGE_KEY);
     if (!raw) return { remainingMs: 0, nextAllowedAtEpoch: 0 };
@@ -106,9 +113,15 @@ export function loadRemainingCooldownMs(): { remainingMs: number; nextAllowedAtE
     ) {
       return { remainingMs: 0, nextAllowedAtEpoch: 0 };
     }
-    const initialDuration = Math.max(0, parsed.nextAllowedAtEpoch - parsed.serverNowEpoch);
+    const initialDuration = Math.max(
+      0,
+      parsed.nextAllowedAtEpoch - parsed.serverNowEpoch
+    );
     const elapsedSinceSave = Math.max(0, Date.now() - parsed.savedAtEpoch);
-    const remainingMs = Math.max(0, Math.min(60_000, initialDuration - elapsedSinceSave));
+    const remainingMs = Math.max(
+      0,
+      Math.min(86400_000, initialDuration - elapsedSinceSave)
+    );
     return {
       remainingMs,
       nextAllowedAtEpoch: parsed.nextAllowedAtEpoch,
@@ -130,7 +143,12 @@ export function subscribeCooldownSync(
     ) {
       const remainingMs = Math.max(
         0,
-        Math.min(60_000, payload.nextAllowedAtEpoch - payload.serverNowEpoch)
+        Math.min(
+          86400_000,
+          payload.nextAllowedAtEpoch -
+            payload.serverNowEpoch -
+            Math.max(0, Date.now() - (payload.savedAtEpoch ?? Date.now()))
+        )
       );
       onUpdate(remainingMs, payload.nextAllowedAtEpoch);
     }
@@ -180,10 +198,13 @@ export interface GenerateStatusResponse {
 
 export async function fetchAiProviderStatus(): Promise<GenerateStatusResponse> {
   const sessionId = getOrCreateAnonSessionId();
-  const res = await fetch(`/api/generate?sessionId=${encodeURIComponent(sessionId)}`, {
-    method: 'GET',
-    cache: 'no-store',
-  });
+  const res = await fetch(
+    `/api/generate?sessionId=${encodeURIComponent(sessionId)}`,
+    {
+      method: 'GET',
+      cache: 'no-store',
+    }
+  );
   const data = await res.json();
   return {
     aiReady: Boolean(data.aiReady),
@@ -199,6 +220,7 @@ export interface GeneratePassageParams {
   topic: Topic;
   length: PassageLength;
   personalCooldownSec: number;
+  seenHashes?: string[];
   signal?: AbortSignal;
 }
 
@@ -227,6 +249,7 @@ export async function requestAiPassage(
       topic: params.topic,
       length: params.length,
       personalCooldownSec: params.personalCooldownSec,
+      seenHashes: params.seenHashes,
       sessionId,
       requestId,
     }),
@@ -236,7 +259,8 @@ export async function requestAiPassage(
   const data = await res.json();
   const serverNow = Number(data.serverNow) || Date.now();
   const nextAllowedAt = Number(data.nextAllowedAt) || 0;
-  const retryAfterMs = Number(data.retryAfterMs) || Math.max(0, nextAllowedAt - serverNow);
+  const retryAfterMs =
+    Number(data.retryAfterMs) || Math.max(0, nextAllowedAt - serverNow);
 
   if (nextAllowedAt > serverNow) {
     saveCooldownToStorage(nextAllowedAt, serverNow);

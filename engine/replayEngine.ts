@@ -70,8 +70,12 @@ export function getGhostPositionAtTime(
 
   const event = replay[bestIdx];
   const clampedIndex = Math.max(0, Math.min(targetLength, event.index));
-  const clampedCorrect = Math.max(0, Math.min(targetLength, event.correctCount));
-  const finished = bestIdx === replay.length - 1 && clampedIndex >= targetLength;
+  const clampedCorrect = Math.max(
+    0,
+    Math.min(targetLength, event.correctCount)
+  );
+  const finished =
+    bestIdx === replay.length - 1 && clampedIndex >= targetLength;
 
   return {
     index: clampedIndex,
@@ -83,6 +87,9 @@ export function getGhostPositionAtTime(
 /**
  * Calculates character lead/deficit against Ghost (`correctFinal - ghost.correctCount`).
  */
-export function calculateGhostDiff(userCorrectFinal: number, ghostCorrectCount: number): number {
+export function calculateGhostDiff(
+  userCorrectFinal: number,
+  ghostCorrectCount: number
+): number {
   return userCorrectFinal - ghostCorrectCount;
 }
