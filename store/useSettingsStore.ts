@@ -57,7 +57,7 @@ function validateAndSanitizeSettings(
     return {
       ...DEFAULT_SETTINGS,
       fxMode: 'lite',
-      screenShakeEnabled: !prefersReducedMotion,
+      screenShakeEnabled: false,
     };
   }
 
@@ -66,7 +66,7 @@ function validateAndSanitizeSettings(
     return {
       ...DEFAULT_SETTINGS,
       fxMode: 'lite',
-      screenShakeEnabled: !prefersReducedMotion,
+      screenShakeEnabled: false,
     };
   }
 
@@ -77,7 +77,7 @@ function validateAndSanitizeSettings(
   const screenShakeEnabled =
     typeof obj.screenShakeEnabled === 'boolean'
       ? obj.screenShakeEnabled
-      : !prefersReducedMotion;
+      : false;
   const cometTrailEnabled =
     typeof obj.cometTrailEnabled === 'boolean' ? obj.cometTrailEnabled : true;
   const virtualKeyboardEnabled =
@@ -266,10 +266,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         // Ignore
       }
     }
-    const reduced = get().reducedMotionSystem;
     set({
       ...DEFAULT_SETTINGS,
-      screenShakeEnabled: !reduced,
+      screenShakeEnabled: false,
+      targetWpm: 0,
     });
     persistSettings(get());
   },

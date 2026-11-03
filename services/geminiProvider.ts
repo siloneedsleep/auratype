@@ -7,7 +7,11 @@ import {
   Topic,
   validatePassageText,
 } from '../utils/text';
-import { readValue, writeValue } from './generationStorage';
+import {
+  nextCredentialOffset,
+  readValue,
+  writeValue,
+} from './generationStorage';
 
 export function configuredKeys() {
   return [
@@ -21,7 +25,6 @@ export function configuredKeys() {
 }
 export const keyId = (key: string) =>
   createHash('sha256').update(key).digest('hex').slice(0, 24);
-let cursor = 0;
 export class ProviderError extends Error {
   constructor(
     public status: number,
@@ -44,12 +47,12 @@ export async function generateGeminiPassage(
       'Gemini đang giới hạn lượt gọi. Hãy dùng bài mẫu và thử lại sau.'
     );
   const keys = configuredKeys();
+  const cursor = await nextCredentialOffset(keys.length);
   let selected: string | undefined;
   for (let i = 0; i < keys.length; i++) {
     const key = keys[(cursor + i) % keys.length];
     if (!(await readValue(`disabled:${keyId(key)}`))) {
       selected = key;
-      cursor = (cursor + i + 1) % keys.length;
       break;
     }
   }
@@ -97,6 +100,29 @@ export async function generateGeminiPassage(
       typeof error === 'object' && error !== null && 'status' in error
         ? Number(error.status)
         : 0;
+    const knownReasons = [
+      'API_KEY_INVALID',
+      'API_KEY_EXPIRED',
+      'API_KEY_SERVICE_BLOCKED',
+      'API_KEY_HTTP_REFERRER_BLOCKED',
+      'SERVICE_DISABLED',
+      'PERMISSION_DENIED',
+      'CONSUMER_INVALID',
+      'CREDENTIALS_MISSING',
+      'BILLING_DISABLED',
+      'UNAUTHENTICATED',
+      'ACCESS_TOKEN_EXPIRED',
+    ];
+    const errorText = error instanceof Error ? error.message : '';
+    const reason =
+      knownReasons.find((code) => errorText.includes(code)) || 'unspecified';
+    console.warn('gemini_request_failed', {
+      status,
+      reason,
+      backend:
+        process.env.GEMINI_BACKEND ||
+        (selected.startsWith('AQ.') ? 'vertex' : 'developer'),
+    });
     if (status === 429) {
       await writeValue('provider-block', Date.now() + 60_000, 60);
       throw new ProviderError(

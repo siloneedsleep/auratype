@@ -189,3 +189,14 @@ export async function cachedPassages(bucket: string): Promise<string[]> {
       ])) as string[])
     : ((getMemory(`pool:${bucket}`) ?? []) as string[]);
 }
+
+let localCredentialCursor = 0;
+export async function nextCredentialOffset(count: number) {
+  if (count <= 0) return 0;
+  if (hasSharedStorage())
+    return (
+      (Number(await redis(['INCR', 'auratype:v2:credential-cursor'])) - 1) %
+      count
+    );
+  return localCredentialCursor++ % count;
+}

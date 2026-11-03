@@ -80,3 +80,11 @@ test('paste is blocked, IME previews are not scored, mistake hints refer to targ
     ['a', 2],
   ]);
 });
+
+test('reset restores target opponent and quiet FX defaults', async () => {
+  const { useSettingsStore } = await import('../store/useSettingsStore');
+  useSettingsStore.getState().setTargetWpm(80);
+  useSettingsStore.getState().resetSettingsToDefault();
+  assert.equal(useSettingsStore.getState().targetWpm, 0);
+  assert.equal(useSettingsStore.getState().screenShakeEnabled, false);
+});
