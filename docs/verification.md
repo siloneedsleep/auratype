@@ -2,7 +2,7 @@
 
 ## Automated
 
-- 21 tests pass: scoring, corrected mistakes, Unicode composition adapter, replay/PB selection, import, all language/topic/length samples, custom passage limits, target opponent positions, historical WPM samples, stale response protection, bounded passage cache and mocked Gemini rotation/429 handling.
+- 22 tests pass: scoring, corrected mistakes, Unicode composition adapter, replay/PB selection, import, all language/topic/length samples, custom passage limits, target opponent positions, historical WPM samples, stale response protection, bounded passage cache and mocked Gemini rotation/429 handling.
 - TypeScript check passes.
 - ESLint passes with zero warnings.
 - Production build passes on Node 24 / Next.js 15.5.28 using an isolated `.next-check` output directory.
@@ -23,10 +23,12 @@
 - Physical Telex/VNI, screen readers and device frame-time profiling require separate checks; no universal FPS or complete WCAG conformance claim is made.
 - Live deployment checks are recorded after release.
 
-## First production deployment
+## Production verification — 04/11/2026 (Asia/Saigon)
 
-- Public page served from https://auratype.vercel.app.
-- GET /api/generate reports AI configured and Redis available.
-- First UI generation attempt enforced shared cooldown but Google rejected the selected credential (401/403 path). Investigating provider backend/permissions; a successful live AI response has not yet been verified.
-
-- Safe provider diagnostics identified HTTP 403 SERVICE_DISABLED on the Vertex endpoint. Production is being checked with the explicitly selected Gemini Developer API backend. Credential failure state is scoped by backend so changing endpoints does not inherit an unrelated disabled-key cache.
+- Public page serves at https://auratype.vercel.app without a sign-in gate.
+- Production Redis connectivity is verified through GET /api/generate and real generation reservations.
+- The UI successfully generated and saved a 246-character Vietnamese passage through the configured Gemini API. The source changed to AI GENERATED and the remaining cooldown appeared.
+- A follow-up API request returned fromCache=true, hasText=true and a positive retryAfterMs, confirming that shared cached passages avoid another model call while retaining cooldown.
+- Endpoint diagnosis is resolved: AQ. authorization keys are supported by Gemini Developer API. Prefix-based Vertex inference was removed; Vertex requires explicit configuration. Safe logs record only status/reason/backend, never raw provider errors or credentials.
+- Production config uses gemini-3.5-flash, five deduplicated server credentials, 100 generation requests/day, 30/hour and a shared Redis limiter/cache.
+- Google documents that the deprecated gemini-3.5-flash alias may route to its replacement; the application preserves the requested configured model name.

@@ -195,3 +195,33 @@ test('authentication rejection fails over once to a healthy credential', async (
   );
   assert.equal(requests, 2);
 });
+test('AQ authorization keys use the Gemini Developer API unless Vertex is explicitly selected', async (t) => {
+  env(t, 'GEMINI_API_KEYS', 'AQ.test-authorization-credential-only');
+  env(t, 'GEMINI_BACKEND', 'developer');
+  const text = getSamplePassage('en', 'philosophy', 'short').content;
+  let endpoint = '';
+  t.mock.method(globalThis, 'fetch', async (url: unknown) => {
+    endpoint = String(url);
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify({ text }) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+          },
+        ],
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+  await generateGeminiPassage(
+    'en',
+    'philosophy',
+    'short',
+    new AbortController().signal
+  );
+  assert.ok(endpoint.startsWith('https://generativelanguage.googleapis.com/'));
+});
