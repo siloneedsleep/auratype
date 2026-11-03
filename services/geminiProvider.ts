@@ -37,7 +37,8 @@ export async function generateGeminiPassage(
   language: Language,
   topic: Topic,
   length: PassageLength,
-  signal: AbortSignal
+  signal: AbortSignal,
+  authAttempts = 0
 ): Promise<string> {
   // Keys belong to one quota group/project. Rotation is credential failover, not quota multiplication.
   const block = Number((await readValue('provider-block')) ?? 0);
@@ -47,11 +48,13 @@ export async function generateGeminiPassage(
       'Gemini đang giới hạn lượt gọi. Hãy dùng bài mẫu và thử lại sau.'
     );
   const keys = configuredKeys();
+  const backend =
+    process.env.GEMINI_BACKEND === 'vertex' ? 'vertex' : 'developer';
   const cursor = await nextCredentialOffset(keys.length);
   let selected: string | undefined;
   for (let i = 0; i < keys.length; i++) {
     const key = keys[(cursor + i) % keys.length];
-    if (!(await readValue(`disabled:${keyId(key)}`))) {
+    if (!(await readValue(`disabled:${backend}:${keyId(key)}`))) {
       selected = key;
       break;
     }
@@ -65,10 +68,7 @@ export async function generateGeminiPassage(
   try {
     const response = await new GoogleGenAI({
       apiKey: selected,
-      vertexai:
-        process.env.GEMINI_BACKEND === 'vertex' ||
-        (process.env.GEMINI_BACKEND !== 'developer' &&
-          selected.startsWith('AQ.')),
+      vertexai: backend === 'vertex',
       httpOptions: { retryOptions: { attempts: 1 } },
     }).models.generateContent({
       model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash',
@@ -119,9 +119,7 @@ export async function generateGeminiPassage(
     console.warn('gemini_request_failed', {
       status,
       reason,
-      backend:
-        process.env.GEMINI_BACKEND ||
-        (selected.startsWith('AQ.') ? 'vertex' : 'developer'),
+      backend,
     });
     if (status === 429) {
       await writeValue('provider-block', Date.now() + 60_000, 60);
@@ -131,8 +129,18 @@ export async function generateGeminiPassage(
       );
     }
     if (status === 401 || status === 403) {
-      await writeValue(`disabled:${keyId(selected)}`, true, 300);
-      // No immediate retry: a new request may select another healthy credential.
+      await writeValue(`disabled:${backend}:${keyId(selected)}`, true, 300);
+      // Credential rejection happens before generation. Try each remaining key at most once.
+      // Quota, timeout and server errors never take this path.
+      if (authAttempts < Math.min(keys.length - 1, 4) && !signal.aborted) {
+        return generateGeminiPassage(
+          language,
+          topic,
+          length,
+          signal,
+          authAttempts + 1
+        );
+      }
       throw new ProviderError(
         503,
         'Kết nối AI hiện chưa khả dụng. Bài mẫu và lịch sử vẫn hoạt động.'

@@ -148,3 +148,50 @@ test('Vercel Marketplace Redis aliases enable shared storage', (t) => {
   env(t, 'KV_REST_API_TOKEN', 'test-token');
   assert.equal(hasSharedStorage(), true);
 });
+test('authentication rejection fails over once to a healthy credential', async (t) => {
+  env(
+    t,
+    'GEMINI_API_KEYS',
+    'auth-test-credential-one,auth-test-credential-two'
+  );
+  const text = getSamplePassage('en', 'philosophy', 'short').content;
+  let requests = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    requests++;
+    if (requests === 1)
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 401,
+            status: 'UNAUTHENTICATED',
+            message: 'UNAUTHENTICATED',
+          },
+        }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify({ text }) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+          },
+        ],
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+  assert.equal(
+    await generateGeminiPassage(
+      'en',
+      'philosophy',
+      'short',
+      new AbortController().signal
+    ),
+    text
+  );
+  assert.equal(requests, 2);
+});

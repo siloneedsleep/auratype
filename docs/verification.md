@@ -2,7 +2,7 @@
 
 ## Automated
 
-- 20 tests pass: scoring, corrected mistakes, Unicode composition adapter, replay/PB selection, import, all language/topic/length samples, custom passage limits, target opponent positions, historical WPM samples, stale response protection, bounded passage cache and mocked Gemini rotation/429 handling.
+- 21 tests pass: scoring, corrected mistakes, Unicode composition adapter, replay/PB selection, import, all language/topic/length samples, custom passage limits, target opponent positions, historical WPM samples, stale response protection, bounded passage cache and mocked Gemini rotation/429 handling.
 - TypeScript check passes.
 - ESLint passes with zero warnings.
 - Production build passes on Node 24 / Next.js 15.5.28 using an isolated `.next-check` output directory.
@@ -28,3 +28,5 @@
 - Public page served from https://auratype.vercel.app.
 - GET /api/generate reports AI configured and Redis available.
 - First UI generation attempt enforced shared cooldown but Google rejected the selected credential (401/403 path). Investigating provider backend/permissions; a successful live AI response has not yet been verified.
+
+- Safe provider diagnostics identified HTTP 403 SERVICE_DISABLED on the Vertex endpoint. Production is being checked with the explicitly selected Gemini Developer API backend. Credential failure state is scoped by backend so changing endpoints does not inherit an unrelated disabled-key cache.
