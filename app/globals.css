@@ -1185,3 +1185,14 @@ dialog[aria-labelledby='history-drawer-title'][open] > div {
     animation: none;
   }
 }
+
+.brand-symbol {
+  background: transparent;
+  border: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+.brand-symbol img {
+  display: block;
+}

@@ -1,10 +1,10 @@
 'use client';
+import Image from 'next/image';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useTypingStore } from '@/store/useTypingStore';
 import { Language, PassageLength, Topic } from '@/utils/text';
 import {
   ArrowUpRight,
-  Command,
   History,
   LoaderCircle,
   Settings2,
@@ -39,7 +39,14 @@ export default function HeaderBar({
         aria-label="AuraType — phòng luyện gõ"
       >
         <span className="brand-symbol">
-          <Command size={21} />
+          <Image
+            src="/brand/auratype-192.png"
+            alt=""
+            width={38}
+            height={38}
+            unoptimized
+            priority
+          />
         </span>
         aura<span>type</span>
         <small>STUDIO</small>
