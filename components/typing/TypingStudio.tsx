@@ -12,6 +12,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useTypingStore } from '@/store/useTypingStore';
 import { formatLiveWpm } from '@/utils/calculations';
 import { coachingTip, practiceSummary, targetPosition } from '@/utils/practice';
+import { isPasteGesture, studioShortcut } from '@/utils/shortcuts';
 import { Language, PassageLength, Topic } from '@/utils/text';
 import {
   AlertCircle,
@@ -95,6 +96,7 @@ export default function TypingStudio() {
   const [isShaking, setIsShaking] = useState(false);
 
   // Modals & Drawers
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -444,6 +446,17 @@ export default function TypingStudio() {
   const handleTextareaInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
     const nativeEvent = e.nativeEvent as InputEvent;
     const latestEngine = useTypingStore.getState().engine;
+    const policy = evaluateBeforeInput(
+      nativeEvent.inputType,
+      nativeEvent.isComposing || latestEngine.isComposing,
+      nativeEvent.data
+    );
+    if (policy.action.type === 'blocked') {
+      e.currentTarget.value = latestEngine.typedGraphemes.join('');
+      onCompositionCancel();
+      setInputNotice(policy.action.reason);
+      return;
+    }
     if (nativeEvent.isComposing || latestEngine.isComposing) {
       return;
     }
@@ -479,6 +492,13 @@ export default function TypingStudio() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const latestEngine = useTypingStore.getState().engine;
+    if (isPasteGesture(e)) {
+      e.preventDefault();
+      setInputNotice(
+        'Đã chặn dán văn bản. Hãy gõ trực tiếp để kết quả được tính công bằng.'
+      );
+      return;
+    }
     // KeyCode 229 or native isComposing indicates active IME processing
     if (
       e.nativeEvent.isComposing ||
@@ -681,8 +701,47 @@ export default function TypingStudio() {
       'Tiếp tục',
       () => setCustomOpen(true)
     );
+  const handleStudioShortcut = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (
+      settingsOpen ||
+      customOpen ||
+      historyOpen ||
+      pendingConfirm ||
+      (engine.status === 'completed' && !resultModalDismissed)
+    )
+      return;
+    const target = e.target as HTMLElement;
+    // Do not consume shortcuts in nickname, custom-text, or other form fields.
+    if (
+      target !== textareaRef.current &&
+      target.closest('input, textarea, select, [contenteditable="true"]')
+    )
+      return;
+    const action = studioShortcut({
+      key: e.key,
+      code: e.code,
+      altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      shiftKey: e.shiftKey,
+      isComposing:
+        e.nativeEvent.isComposing ||
+        engine.isComposing ||
+        e.nativeEvent.keyCode === 229,
+      altGraph: e.getModifierState('AltGraph'),
+    });
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat) return;
+    if (action === 'retry' && !typingStore.aiGenerating) retry();
+    if (action === 'sound') settings.setSoundEnabled(!settings.soundEnabled);
+    if (action === 'keyboard')
+      settings.setVirtualKeyboardEnabled(!settings.virtualKeyboardEnabled);
+    if (action === 'help') setShortcutsOpen((value) => !value);
+  };
   return (
-    <div className="studio-app">
+    <div className="studio-app" onKeyDownCapture={handleStudioShortcut}>
       <a className="skip-link" href="#typing-controls">
         Đến vùng luyện gõ
       </a>
@@ -721,7 +780,21 @@ export default function TypingStudio() {
             <span className="tiny-key">esc</span> cài đặt
           </span>
         </div>
-        <section className="practice-panel" aria-label="Phòng luyện gõ">
+        <section
+          className="practice-panel"
+          aria-label="Phòng luyện gõ"
+          onPasteCapture={(e) => {
+            e.preventDefault();
+            setInputNotice(
+              'Đã chặn dán văn bản vào phòng luyện. Hãy gõ trực tiếp.'
+            );
+          }}
+          onDropCapture={(e) => {
+            e.preventDefault();
+            setInputNotice('Đã chặn kéo thả văn bản vào phòng luyện.');
+          }}
+          onDragOver={(e) => e.preventDefault()}
+        >
           <div id="typing-controls" className="practice-toolbar">
             <div className="control-set" role="group" aria-label="Ngôn ngữ">
               {(['vi', 'en'] as const).map((lang) => (
@@ -1003,6 +1076,8 @@ export default function TypingStudio() {
                 aria-label={
                   settings.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'
                 }
+                aria-keyshortcuts="Alt+M"
+                title="Âm thanh (Alt + M)"
                 aria-pressed={settings.soundEnabled}
                 onClick={() => settings.setSoundEnabled(!settings.soundEnabled)}
               >
@@ -1015,6 +1090,8 @@ export default function TypingStudio() {
               <button
                 className="icon-button"
                 aria-label="Bật tắt bàn phím ảo"
+                aria-keyshortcuts="Alt+K"
+                title="Bàn phím ảo (Alt + K)"
                 aria-pressed={settings.virtualKeyboardEnabled}
                 onClick={() =>
                   settings.setVirtualKeyboardEnabled(
@@ -1026,13 +1103,84 @@ export default function TypingStudio() {
               </button>
               <button
                 className="retry-button"
+                aria-keyshortcuts="Alt+R"
+                title="Gõ lại (Alt + R)"
                 disabled={typingStore.aiGenerating}
                 onClick={retry}
               >
                 <RotateCcw size={15} /> Gõ lại
               </button>
+              <button
+                className="icon-button"
+                aria-label="Phím tắt"
+                aria-keyshortcuts="Alt+/"
+                aria-expanded={shortcutsOpen}
+                aria-controls="studio-shortcuts"
+                onClick={() => setShortcutsOpen((v) => !v)}
+                title="Phím tắt (Alt + /)"
+              >
+                <Keyboard size={17} />
+                <span className="shortcut-label">Phím tắt</span>
+              </button>
             </div>
           </div>
+        </section>
+        <section
+          id="studio-shortcuts"
+          className="shortcut-guide"
+          hidden={!shortcutsOpen}
+          aria-label="Hướng dẫn phím tắt"
+        >
+          <div>
+            <strong>Giữ nhịp bằng bàn phím</strong>
+            <span>
+              Phím tắt dùng trong phòng luyện; tạm ngưng khi mở hộp thoại hoặc
+              nhập vào ô khác.
+            </span>
+          </div>
+          <dl>
+            <div>
+              <dt>
+                <kbd>Alt</kbd> + <kbd>R</kbd>
+              </dt>
+              <dd>Gõ lại · hỏi trước nếu đang gõ</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Alt</kbd> + <kbd>M</kbd>
+              </dt>
+              <dd>Bật / tắt âm thanh</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Alt</kbd> + <kbd>K</kbd>
+              </dt>
+              <dd>Bật / tắt bàn phím ảo</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Alt</kbd> + <kbd>/</kbd>
+              </dt>
+              <dd>Ẩn / hiện hướng dẫn này</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Esc</kbd>
+              </dt>
+              <dd>Cài đặt · đóng hộp thoại</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Ctrl</kbd> + <kbd>Backspace</kbd>
+              </dt>
+              <dd>Xóa từ vừa gõ</dd>
+            </div>
+          </dl>
+          <p>
+            Anti-paste đang bật: Ctrl/Cmd + V, Shift + Insert, dán bằng chuột
+            phải và kéo thả đều bị chặn trong lượt gõ. Bạn vẫn có thể dán nội
+            dung để soạn bài trong “Bài của bạn”.
+          </p>
         </section>
         {statusBannerMessage && (
           <div role="status" className="notice">

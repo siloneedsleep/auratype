@@ -1599,5 +1599,79 @@ dialog[aria-labelledby='history-drawer-title'][open] > div {
   }
 }
 
-.journey-tabs { scrollbar-width: none; }
-.journey { scroll-margin-top: 24px; }
+.journey-tabs {
+  scrollbar-width: none;
+}
+.journey {
+  scroll-margin-top: 24px;
+}
+
+.shortcut-guide {
+  margin: 16px 0;
+  padding: 22px;
+  border: 1px solid #3d4933;
+  border-radius: 15px;
+  background: #1a2016;
+}
+.shortcut-guide[hidden] {
+  display: none;
+}
+.shortcut-guide strong {
+  display: block;
+  color: #d4edb7;
+  font-size: 15px;
+}
+.shortcut-guide span,
+.shortcut-guide p {
+  display: block;
+  color: #a3af97;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 7px;
+}
+.shortcut-guide dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 22px 0;
+}
+.shortcut-guide dt {
+  font: 12px monospace;
+  color: #d5e9c1;
+}
+.shortcut-guide kbd {
+  display: inline-block;
+  border: 1px solid #50613e;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  background: #2a3421;
+  padding: 3px 7px;
+}
+.shortcut-guide dd {
+  font-size: 11px;
+  color: #9eae90;
+  margin: 8px 0 0;
+}
+.shortcut-label {
+  font-size: 11px;
+  margin-left: 5px;
+}
+.arena-footer > div {
+  flex-wrap: wrap;
+}
+@media (max-width: 650px) {
+  .shortcut-guide dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shortcut-label {
+    display: none;
+  }
+}
+
+.arena-footer .icon-button[aria-controls='studio-shortcuts'] {
+  width: auto;
+  min-width: 36px;
+  padding-inline: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

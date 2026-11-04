@@ -93,6 +93,16 @@ export function reconcileInputDiff(params: {
     justEndedCompositionText,
   } = params;
 
+  // Some browsers deliver input even when beforeinput is absent/non-cancelable.
+  // Reject the source itself, including one-character paste and paste during IME.
+  if (inputType && BLOCKED_INPUT_TYPES.has(inputType)) {
+    return {
+      type: 'blocked',
+      reason:
+        'Không được dán hoặc kéo thả văn bản vào lượt gõ. Hãy nhập từng ký tự.',
+    };
+  }
+
   const committedString = normalizeNFC(committedGraphemes.join(''));
   const currentNormalized = normalizeNFC(
     rawTextareaValue.replace(/[\r\n\t]/g, '')
