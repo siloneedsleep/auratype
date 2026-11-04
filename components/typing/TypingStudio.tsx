@@ -1103,11 +1103,24 @@ export default function TypingStudio() {
                 }
               >
                 <option value={0}>Kỷ lục cá nhân</option>
-                {[30, 40, 50, 60, 80, 100, 120].map((n) => (
-                  <option key={n} value={n}>
-                    Mục tiêu {n} WPM
-                  </option>
-                ))}
+                {[
+                  ...new Set([
+                    30,
+                    40,
+                    50,
+                    60,
+                    80,
+                    100,
+                    120,
+                    ...(settings.targetWpm > 0 ? [settings.targetWpm] : []),
+                  ]),
+                ]
+                  .sort((a, b) => a - b)
+                  .map((n) => (
+                    <option key={n} value={n}>
+                      Mục tiêu {n} WPM
+                    </option>
+                  ))}
               </select>
             </label>
             <div className="ghost-status" data-testid="hud-ghost-status">

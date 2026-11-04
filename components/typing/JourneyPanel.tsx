@@ -60,7 +60,7 @@ export default function JourneyPanel() {
       if (saved?.goal === 'speed' || saved?.goal === 'accuracy')
         setGoal(saved.goal);
       if (Number.isFinite(saved?.target))
-        setTargetValue(Math.max(10, Math.min(200, saved.target)));
+        setTargetValue(Math.max(10, Math.min(150, saved.target)));
     } catch {}
     setReady(true);
   }, []);
@@ -339,7 +339,7 @@ export default function JourneyPanel() {
             </label>
             <button
               className="journey-primary"
-              disabled={busy}
+              disabled={busy || status === 'running'}
               onClick={() => start(true)}
             >
               Luyện điểm yếu <ArrowUpRight size={17} />
@@ -373,11 +373,11 @@ export default function JourneyPanel() {
                 <input
                   type="number"
                   min={10}
-                  max={200}
+                  max={150}
                   value={target}
                   onChange={(e) =>
                     setTargetValue(
-                      Math.max(10, Math.min(200, Number(e.target.value) || 10))
+                      Math.max(10, Math.min(150, Number(e.target.value) || 10))
                     )
                   }
                 />
@@ -418,9 +418,11 @@ export default function JourneyPanel() {
             </ol>
             <button
               className="journey-primary"
-              disabled={busy}
+              disabled={busy || status === 'running'}
               onClick={() => {
                 setTarget(goal === 'speed' ? target : 0);
+                if (goal === 'speed')
+                  useSettingsStore.getState().setGhostEnabled(true);
                 void start(true);
               }}
             >
@@ -499,7 +501,7 @@ export default function JourneyPanel() {
             </blockquote>
             <button
               className="journey-primary"
-              disabled={busy}
+              disabled={busy || status === 'running'}
               onClick={() => start(false)}
             >
               {busy ? 'Đang xử lý…' : 'Tham gia thử thách'}{' '}
