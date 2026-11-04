@@ -46,6 +46,7 @@ import VirtualKeyboard from './VirtualKeyboard';
 const CustomPassageModal = dynamic(
   () => import('../modals/CustomPassageModal')
 );
+const JourneyPanel = dynamic(() => import('./JourneyPanel'));
 const ResultModal = dynamic(() => import('../modals/ResultModal'));
 const SettingsModal = dynamic(() => import('../modals/SettingsModal'));
 const HistoryDrawer = dynamic(() => import('../history/HistoryDrawer'));
@@ -702,9 +703,9 @@ export default function TypingStudio() {
             </h1>
             <p>Mỗi phím gõ, một chút tiến bộ. Thả lỏng và bắt đầu.</p>
           </div>
-          <button className="text-link intro-link" onClick={handleOpenHistory}>
+          <a className="text-link intro-link" href="#journey">
             Hành trình của bạn <ArrowUpRight size={17} />
-          </button>
+          </a>
         </div>
         <div className="workspace-tabs">
           <span className="workspace-tab active">
@@ -1184,6 +1185,7 @@ export default function TypingStudio() {
             </div>
           </section>
         </div>
+        <JourneyPanel />
         <footer className="studio-footer">
           <span>
             <span className="brand-mini">

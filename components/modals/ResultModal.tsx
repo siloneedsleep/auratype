@@ -1,4 +1,5 @@
 'use client';
+import { downloadResultCard } from '@/utils/shareResult';
 import { useDialog } from '@/hooks/useDialog';
 import { coachingTip, mistakeTargets } from '@/utils/practice';
 
@@ -237,6 +238,7 @@ export default function ResultModal({
     (engine.accuracy ?? 0) >= 95;
   const elapsedSec = (engine.elapsedMs / 1000).toFixed(2);
 
+  const language = useSettingsStore((s) => s.language);
   const mistakes = mistakeTargets(
     engine.targetGraphemes,
     engine.typedGraphemes
@@ -429,6 +431,15 @@ export default function ResultModal({
           )}
         </div>
 
+        <button
+          type="button"
+          className="share-result mt-4"
+          onClick={() =>
+            downloadResultCard(engine.wpm, engine.accuracy ?? 0, language)
+          }
+        >
+          Tải thẻ kết quả ↗
+        </button>
         {/* Footer Actions */}
         <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
           <button

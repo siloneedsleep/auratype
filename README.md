@@ -65,3 +65,9 @@ Automated checks cover scoring, Unicode composition adapters, replay/PB selectio
 Manual browser QA checks the English passage → saved result → retry with Ghost flow, custom text, abandon confirmation, modal settings, history and responsive layout. Physical Windows Telex/VNI and screen-reader testing remain separate device checks; simulated composition tests do not certify every IME.
 
 See `docs/verification.md` for the verification record and `docs/UI-UX-guidelines.md` for design rationale.
+
+## Practice journey
+
+The Journey panel includes a character heatmap from completed replays (including corrected errors), targeted vocabulary drills by topic, saved accuracy/speed goals, a five-minute practice guide, seven-day WPM/accuracy charts, and downloadable SVG result cards. IME batch timestamps are excluded from reaction-time averages; the heatmap measures committed characters, not physical Telex/VNI keys. Imported results do not affect personal insights.
+
+Daily Flow uses the same rotating built-in short passage for everyone in each language, with the day changing at midnight in Vietnam (UTC+7). Redis stores short-lived runs and daily community leaderboards. Start a run, complete it, close the result dialog, then choose a public nickname and submit in the Daily tab. Only the best daily score per anonymous browser is retained; top 20 are shown. The server recomputes scores from replay, checks timing/ownership, enforces a 90% accuracy floor and 250 WPM ceiling, limits starts per IP, and consumes each run atomically. This is a casual community board; browser-side replay cannot provide tournament-grade anti-cheat. Public results expire after two days and unsubmitted runs after 30 minutes. No personal practice history is uploaded. Redis uses the same existing production environment variables as generation.
